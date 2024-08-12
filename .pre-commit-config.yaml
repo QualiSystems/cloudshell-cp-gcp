@@ -28,7 +28,7 @@ repos:
           flake8-requirements,
         ]
         args: [
-          "--known-modules=cloudshell-template:[cloudshell.template],cloudshell-shell-core:[cloudshell.shell.core]"
+          "--known-modules=cloudshell-cp:[cloudshell.cp],cloudshell-shell-core:[cloudshell.shell.core]"
         ]
         exclude: '/mibs'
   - repo: https://github.com/pre-commit/mirrors-mypy
