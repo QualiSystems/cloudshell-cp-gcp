@@ -37,7 +37,7 @@ class BaseGCPHandler:
             return wrapper
 
         @classmethod
-        def zone_wait(client, project, zone, operation):
+        def zone_wait(cls, client, project, zone, operation):
             """ input: client, project, zone, and operation
                 output: request result - json
                 sleep/waits for zone operation to complete
@@ -55,7 +55,7 @@ class BaseGCPHandler:
                 time.sleep(1)
 
         @classmethod
-        def region_wait(client, project, region, operation):
+        def region_wait(cls, client, project, region, operation):
             """ input: gce connection and operation
                 output: request result - json
                 sleep/waits for region operation to complete
@@ -73,7 +73,7 @@ class BaseGCPHandler:
                 time.sleep(1)
 
         @classmethod
-        def global_wait(client, project, operation):
+        def global_wait(cls, client, project, operation):
             """ input: gce client and operation
                 output: request result - json
                 sleep/waits for global operation to complete
@@ -93,3 +93,7 @@ class BaseGCPHandler:
     @cached_property
     def gcp_session(self) -> Resource:
         return googleapiclient.discovery.build('compute', 'v1')
+
+    @classmethod
+    def from_config(cls, config: dict):
+        raise NotImplementedError
