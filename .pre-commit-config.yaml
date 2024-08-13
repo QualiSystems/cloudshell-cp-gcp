@@ -4,14 +4,14 @@ repos:
     hooks:
       - id: pyupgrade
         args:
-          - "--py37-plus"
+          - "--py39-plus"
   - repo: https://github.com/timothycrosley/isort
     rev: 5.12.0
     hooks:
       - id: isort
         exclude: '/mibs'
   - repo: https://github.com/python/black
-    rev: 23.3.0
+    rev: 22.12.0
     hooks:
       - id: black
         exclude: '/mibs'
@@ -26,9 +26,6 @@ repos:
           flake8-print,
           flake8-eradicate,
           flake8-requirements,
-        ]
-        args: [
-          "--known-modules=cloudshell-cp:[cloudshell.cp],cloudshell-shell-core:[cloudshell.shell.core]"
         ]
         exclude: '/mibs'
   - repo: https://github.com/pre-commit/mirrors-mypy

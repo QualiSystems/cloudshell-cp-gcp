@@ -1,7 +1,17 @@
+from __future__ import annotations
+
+import logging
+
+from google.cloud import compute_v1
 from functools import cached_property
+from typing import TYPE_CHECKING
 
 from cloudshell.cp.gcp.handlers.base import BaseGCPHandler
-from google.cloud import compute_v1
+
+
+# if TYPE_CHECKING:
+
+logger = logging.getLogger(__name__)
 
 
 class VPCHandler(BaseGCPHandler):
@@ -11,12 +21,12 @@ class VPCHandler(BaseGCPHandler):
         return compute_v1.Network()
 
     def get_vpc_by_name(self, network_name):
-        self.logger.info("Getting VPC")
+        logger.info("Getting VPC")
         return self.network_client.get(project=self.project_id, network=network_name)
 
     def get_vpc_by_sandbox_id(self, sandbox_id):
         tag_name = "sandbox_id"
-        self.logger.info("Getting VPC")
+        logger.info("Getting VPC")
         networks = self.network_client.list(project=self.project_id)
 
         # Filter networks by label

@@ -1,1 +1,5 @@
-cloudshell-shell-core~=5.1
+google-cloud-compute
+cloudshell-shell-core~=6.0
+cloudshell-shell-flows~=3.0
+attrs>=22,<24
+typing-extensions>=4.4

@@ -6,6 +6,11 @@ def read_file(file_name: str) -> str:
         return fo.read().strip()
 
 
+description = (
+    "<your package description>"
+)
+
+
 setup(
     name="cloudshell-cp-gcp",
     url="http://www.qualisystems.com/",
@@ -17,7 +22,7 @@ setup(
     python_requires="~=3.9",
     version=read_file("version.txt"),
     package_data={"": ["*.txt"]},
-    description="<your package description>",
-    long_description="<your package description>",
+    description=description,
+    long_description=description,
     include_package_data=True,
 )
