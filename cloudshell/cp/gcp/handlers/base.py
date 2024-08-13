@@ -5,6 +5,10 @@ from googleapiclient.discovery import Resource
 
 
 class BaseGCPHandler:
+    def __init__(self, project_id: str):
+        self.project_id = project_id
+
+
     class Decorators:
         @classmethod
         def get_data(
