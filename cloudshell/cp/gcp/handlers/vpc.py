@@ -18,7 +18,7 @@ class VPCHandler(BaseGCPHandler):
 
     @cached_property
     def network_client(self):
-        return compute_v1.Network()
+        return compute_v1.NetworksClient(credentials=self.credentials)
 
     def get_vpc_by_name(self, network_name):
         logger.info("Getting VPC")

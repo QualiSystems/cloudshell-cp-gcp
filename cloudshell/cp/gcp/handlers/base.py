@@ -1,13 +1,14 @@
 from functools import cached_property
 
 import googleapiclient
+from google.auth.credentials import Credentials
 from googleapiclient.discovery import Resource
 
 
 class BaseGCPHandler:
-    def __init__(self, project_id: str):
+    def __init__(self, project_id: str, credentials: Credentials):
         self.project_id = project_id
-
+        self.credentials = credentials
 
     class Decorators:
         @classmethod
@@ -100,4 +101,6 @@ class BaseGCPHandler:
 
     @classmethod
     def from_config(cls, config: dict):
+        credentials = service_account.Credentials.from_service_account_info(
+            self.json_file_path)
         raise NotImplementedError
