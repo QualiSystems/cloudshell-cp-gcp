@@ -1,8 +1,9 @@
 from __future__ import annotations
 
-from collections.abc import Callable
-
 from attr import define, Attribute
+from collections.abc import Callable
+from typing_extensions import TYPE_CHECKING
+
 from cloudshell.api.cloudshell_api import ResourceInfo, CloudShellAPISession
 from cloudshell.shell.standards.core.namespace_type import NameSpaceType
 from cloudshell.shell.standards.core.resource_conf import attr, BaseConfig
@@ -12,6 +13,11 @@ from cloudshell.shell.standards.core.resource_conf.attrs_getter import (
     MODEL,
     AbsAttrsGetter,
 )
+
+from cloudshell.cp.gcp.helpers.converters import get_credentials
+
+if TYPE_CHECKING:
+    from google.auth.credentials import Credentials
 
 
 class ResourceInfoAttrGetter(AbsAttrsGetter):
@@ -61,7 +67,11 @@ class GCPResourceConfig(BaseConfig):
     region: str = attr(ATTR_NAMES.region)
     machine_type: str = attr(ATTR_NAMES.machine_type)
     networks_in_use: str = attr(ATTR_NAMES.networks_in_use)
-    json_keys: str = attr(ATTR_NAMES.json_keys, is_password=True)
+    json_keys: Credentials = attr(
+        ATTR_NAMES.json_keys,
+        is_password=True,
+        converter=get_credentials
+    )
     _custom_tags: list[str] = attr(ATTR_NAMES.custom_tags, default={})
     availability_zone: str = attr(ATTR_NAMES.zone)
 
@@ -75,9 +85,7 @@ class GCPResourceConfig(BaseConfig):
         details: ResourceInfo,
         api: CloudShellAPISession,
     ) -> GCPResourceConfig:
-        attrs = ResourceInfoAttrGetter(
-            cls, password_decryptor(api), details
-        ).get_attrs()
+        attrs = ResourceInfoAttrGetter(cls, password_decryptor(api), details).get_attrs()
         converter = cls._CONVERTER(cls, attrs)
         return cls(
             name=details.Name,

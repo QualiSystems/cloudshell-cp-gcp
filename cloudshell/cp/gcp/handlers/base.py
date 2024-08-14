@@ -1,106 +1,63 @@
-from functools import cached_property
+from __future__ import annotations
 
-import googleapiclient
-from google.auth.credentials import Credentials
-from googleapiclient.discovery import Resource
+from attrs import define
+from google.api_core import gapic_v1
+from google.cloud import compute_v1
+
+from typing_extensions import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from google.auth.credentials import Credentials
 
 
+@define
 class BaseGCPHandler:
-    def __init__(self, project_id: str, credentials: Credentials):
-        self.project_id = project_id
-        self.credentials = credentials
+    credentials: Credentials
 
-    class Decorators:
-        @classmethod
-        def get_data(
-            cls,
-            retries: int = 6,
-            timeout: int = 5,
-            raise_on_timeout: bool = True
-        ):
-            def wrapper(decorated):
-                def inner(*args, **kwargs):
-                    exception = None
-                    attempt = 0
-                    while attempt < retries:
-                        try:
-                            return decorated(*args, **kwargs).json()["data"]
-                        except Exception as e:
-                            exception = e
-                            time.sleep(timeout)
-                            attempt += 1
+    def wait_for_operation(
+            self,
+            name: str,
+            region: str = None,
+            zone: str = None,
+            timeout: float=gapic_v1.method.DEFAULT
+    ) -> None:
+        wait_attributes = {
+            "project": self.credentials.project_id,
+            "operation": name,
+            "timeout": timeout
+        }
+        if zone:
+            operation_client = compute_v1.ZoneOperationsClient()
+            wait_attributes["zone"] = zone
+        elif region:
+            operation_client = compute_v1.RegionOperationsClient()
+            wait_attributes["region"] = region
+        else:
+            operation_client = compute_v1.GlobalOperationsClient()
 
-                    if raise_on_timeout:
-                        if exception:
-                            raise exception
-                        else:
-                            raise BaseProxmoxException(
-                                f"Cannot get data for {retries*timeout} sec."
-                            )
+        operation_client.wait(**wait_attributes)
 
-                return inner
-            return wrapper
-
-        @classmethod
-        def zone_wait(cls, client, project, zone, operation):
-            """ input: client, project, zone, and operation
-                output: request result - json
-                sleep/waits for zone operation to complete
-            """
-            while True:
-                result = client.zoneOperations().get(project=project, zone=zone,
-                                                     operation=operation).execute()
-                if result['status'] == 'DONE':
-                    print("done")
-                    if 'error' in result:
-                        raise Exception(result['error'])
-                    return result
-                else:
-                    print("waiting for " + operation)
-                time.sleep(1)
-
-        @classmethod
-        def region_wait(cls, client, project, region, operation):
-            """ input: gce connection and operation
-                output: request result - json
-                sleep/waits for region operation to complete
-            """
-            while True:
-                result = client.regionOperations().get(project=project, region=region,
-                                                       operation=operation).execute()
-                if result['status'] == 'DONE':
-                    print("done")
-                    if 'error' in result:
-                        raise Exception(result['error'])
-                    return result
-                else:
-                    print("waiting for " + operation)
-                time.sleep(1)
-
-        @classmethod
-        def global_wait(cls, client, project, operation):
-            """ input: gce client and operation
-                output: request result - json
-                sleep/waits for global operation to complete
-            """
-            while True:
-                result = client.globalOperations().get(project=project,
-                                                       operation=operation).execute()
-                if result['status'] == 'DONE':
-                    print("done")
-                    if 'error' in result:
-                        raise Exception(result['error'])
-                    return result
-                else:
-                    print("waiting for " + operation)
-                time.sleep(1)
-
-    @cached_property
-    def gcp_session(self) -> Resource:
-        return googleapiclient.discovery.build('compute', 'v1')
-
-    @classmethod
-    def from_config(cls, config: dict):
-        credentials = service_account.Credentials.from_service_account_info(
-            self.json_file_path)
-        raise NotImplementedError
+    # def wait_to_complete(self, timeout: float):
+    #     def decorator(func):
+    #         def wrapper(*args, **kwargs):
+    #             operation = func(*args, **kwargs)
+    #
+    #             wait_attributes = {
+    #                 "project": self.credentials.project_id,
+    #                 "operation": operation.name,
+    #             }
+    #
+    #             if timeout:
+    #                 wait_attributes["timeout"] = timeout
+    #
+    #             if "zone" in kwargs:
+    #                 operation_client = compute_v1.ZoneOperationsClient()
+    #                 wait_attributes["zone"] = kwargs["zone"]
+    #             else:
+    #                 operation_client = compute_v1.GlobalOperationsClient()
+    #
+    #             operation_client.wait(**wait_attributes)
+    #
+    #             return operation
+    #         return wrapper
+    #     return decorator
