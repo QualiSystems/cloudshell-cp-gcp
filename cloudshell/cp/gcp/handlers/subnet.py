@@ -39,6 +39,7 @@ class SubnetHandler(BaseGCPHandler):
         operation_client.wait(project=self.project_id, operation=operation.name)
 
         print(f"Subnet '{subnet_name}' created successfully.")
+        return self.get_subnet_by_name(subnet_name, region).id
 
     def get_subnet_by_name(self, subnet_name, region):
         logger.info("Getting subnet")
