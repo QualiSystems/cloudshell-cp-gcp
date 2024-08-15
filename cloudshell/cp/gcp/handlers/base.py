@@ -27,13 +27,13 @@ class BaseGCPHandler:
             "timeout": timeout
         }
         if zone:
-            operation_client = compute_v1.ZoneOperationsClient()
+            operation_client = compute_v1.ZoneOperationsClient(credentials=self.credentials)
             wait_attributes["zone"] = zone
         elif region:
-            operation_client = compute_v1.RegionOperationsClient()
+            operation_client = compute_v1.RegionOperationsClient(credentials=self.credentials)
             wait_attributes["region"] = region
         else:
-            operation_client = compute_v1.GlobalOperationsClient()
+            operation_client = compute_v1.GlobalOperationsClient(credentials=self.credentials)
 
         operation_client.wait(**wait_attributes)
 

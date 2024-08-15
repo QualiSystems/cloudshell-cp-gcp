@@ -1,8 +1,10 @@
 from __future__ import annotations
 
 import logging
+from contextlib import suppress
 
 from attrs import define
+from google.api_core.exceptions import NotFound
 from typing_extensions import TYPE_CHECKING
 from functools import cached_property
 from google.cloud import compute_v1
@@ -23,6 +25,15 @@ class SubnetHandler(BaseGCPHandler):
     @cached_property
     def subnet_client(self):
         return compute_v1.SubnetworksClient(credentials=self.credentials)
+
+    def get_or_create_subnet(self, network_name: str, subnet_name: str, ip_cidr_range: str, region: str = None) -> str:
+        """Get subnet by its name or create a new one."""
+        with suppress(NotFound):
+            subnet = self.get_subnet_by_name(subnet_name, region)
+            if subnet:
+                logger.info(f"Subnet '{subnet}' already exists.")
+                return subnet
+        return self.create(network_name, subnet_name, ip_cidr_range, region)
 
     def create(
             self,
@@ -49,16 +60,19 @@ class SubnetHandler(BaseGCPHandler):
         )
 
         # Wait for the operation to complete
-        self.wait_for_operation(name=operation.name)
-        # self.wait_for_operation(name=operation.name, region=region)
+        # self.wait_for_operation(name=operation.name)
+        self.wait_for_operation(name=operation.name, region=region)
 
         logger.info(f"Subnet '{subnet_name}' created successfully.")
         return self.get_subnet_by_name(subnet_name, region).id
 
-    def get_subnet_by_name(self, subnet_name: str, region: str) -> compute.Subnetwork:
+    def get_subnet_by_name(self, subnet_name: str, region: str=None) -> str:
         """"""
         logger.info("Getting subnet")
-        return self.subnet_client.get(project=self.credentials.project_id, region=region, subnetwork=subnet_name)
+        if not region:
+            region = self.region
+        return self.subnet_client.get(project=self.credentials.project_id,
+                                      region=region, subnetwork=subnet_name).name
 
     def delete(self, subnet_name: str, region: str = None) -> None:
         """Tru to delete subnet by its name."""
@@ -72,7 +86,7 @@ class SubnetHandler(BaseGCPHandler):
         )
 
         # Wait for the operation to complete
-        self.wait_for_operation(name=operation.name)
+        self.wait_for_operation(name=operation.name, region=region)
         # self.wait_for_operation(name=operation.name, region=region)
 
         logger.info(f"Subnet '{subnet_name}' deleted successfully.")

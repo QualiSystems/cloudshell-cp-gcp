@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 from contextlib import suppress
 from typing_extensions import TYPE_CHECKING
 
@@ -14,7 +15,8 @@ def get_credentials(account_info: str) -> Credentials:
     """"""
     # assume that json data provided
     with suppress(AttributeError):
-        return service_account.Credentials.from_service_account_info(account_info)
+        account_dict = json.loads(account_info)
+        return service_account.Credentials.from_service_account_info(account_dict)
 
     # otherwise, the path to the configuration file is expected
     with suppress(FileNotFoundError):

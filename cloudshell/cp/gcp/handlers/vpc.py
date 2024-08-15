@@ -1,7 +1,9 @@
 from __future__ import annotations
 
 import logging
+from contextlib import suppress
 
+from google.api_core.exceptions import NotFound
 from google.cloud import compute_v1
 from functools import cached_property
 from typing import TYPE_CHECKING
@@ -39,6 +41,15 @@ class VPCHandler(BaseGCPHandler):
             if network.labels and network.labels.get(tag_name) == sandbox_id:
                 return network
 
+    def get_or_create_vpc(self, sandbox_id: str) -> str:
+        """Get VPC by Sandbox ID or create a new one."""
+        with suppress(NotFound):
+            vpc = self.get_vpc_by_name(sandbox_id)
+            if vpc:
+                logger.info(f"VPC network '{vpc.name}' already exists.")
+                return vpc.name
+        return self.create(sandbox_id)
+
     def create(self, network_name: str) -> str:
         """Create VPC."""
         # Define the VPC network settings
@@ -55,8 +66,8 @@ class VPCHandler(BaseGCPHandler):
         # Wait for the operation to complete
         self.wait_for_operation(name=operation.name)
 
-        logger.info(f"VPC network '{network_name}' created successfully.")
-        return self.get_vpc_by_name(network_name).id
+        logger.info(f"VPC network '{network.name}' created successfully.")
+        return network.name
 
     def delete(self, network_name: str) -> None:
         operation = self.network_client.delete(

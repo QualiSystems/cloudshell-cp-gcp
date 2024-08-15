@@ -2,6 +2,8 @@ from __future__ import annotations
 
 from attr import define, Attribute
 from collections.abc import Callable
+
+from cloudshell.shell.standards.core.resource_conf.attrs_converters import ListConverter
 from typing_extensions import TYPE_CHECKING
 
 from cloudshell.api.cloudshell_api import ResourceInfo, CloudShellAPISession
@@ -55,6 +57,7 @@ class GCPAttributeNames:
     region = "Region"
     json_keys = "Credentials Json"
     zone = "Availability Zone"
+    keypairs_location = "Keypairs Location"
     machine_type = "Machine Type"
     custom_tags = "Custom Tags"
     networks_in_use = "Networks in use"
@@ -67,17 +70,21 @@ class GCPResourceConfig(BaseConfig):
     region: str = attr(ATTR_NAMES.region)
     machine_type: str = attr(ATTR_NAMES.machine_type)
     networks_in_use: str = attr(ATTR_NAMES.networks_in_use)
-    json_keys: Credentials = attr(
+    keypairs_location: str = attr(ATTR_NAMES.keypairs_location)
+    credentials: Credentials = attr(
         ATTR_NAMES.json_keys,
         is_password=True,
         converter=get_credentials
     )
-    _custom_tags: list[str] = attr(ATTR_NAMES.custom_tags, default={})
+    custom_tags_list: list = attr(
+        ATTR_NAMES.custom_tags,
+        default=[],
+    )
     availability_zone: str = attr(ATTR_NAMES.zone)
 
     @property
     def custom_tags(self) -> dict:
-        return {tag.split("=")[0]: tag.split("=")[1] for tag in self._custom_tags}
+        return {tag.split("=")[0]: tag.split("=")[1] for tag in self.custom_tags_list}
 
     @classmethod
     def from_cs_resource_details(
