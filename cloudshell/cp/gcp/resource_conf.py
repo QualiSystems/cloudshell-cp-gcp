@@ -1,9 +1,15 @@
 from __future__ import annotations
 
+from functools import cached_property
+
 from attr import define, Attribute
 from collections.abc import Callable
 
-from cloudshell.shell.standards.core.resource_conf.attrs_converters import ListConverter
+from cloudshell.cp.core.reservation_info import ReservationInfo
+from cloudshell.helpers.scripts.cloudshell_scripts_helpers import \
+    ReservationContextDetails
+from cloudshell.shell.core.driver_context import ResourceRemoteCommandContext
+from typing_extensions import Self
 from typing_extensions import TYPE_CHECKING
 
 from cloudshell.api.cloudshell_api import ResourceInfo, CloudShellAPISession
@@ -13,7 +19,7 @@ from cloudshell.shell.standards.core.resource_conf.base_conf import password_dec
 from cloudshell.shell.standards.core.resource_conf.resource_attr import AttrMeta
 from cloudshell.shell.standards.core.resource_conf.attrs_getter import (
     MODEL,
-    AbsAttrsGetter,
+    AbsAttrsGetter, RESOURCE_CONTEXT_TYPES,
 )
 
 from cloudshell.cp.gcp.helpers.converters import get_credentials
@@ -65,6 +71,7 @@ class GCPAttributeNames:
 
 @define(slots=False, str=False)
 class GCPResourceConfig(BaseConfig):
+    context: RESOURCE_CONTEXT_TYPES
     ATTR_NAMES = GCPAttributeNames
 
     region: str = attr(ATTR_NAMES.region)
@@ -82,9 +89,50 @@ class GCPResourceConfig(BaseConfig):
     )
     availability_zone: str = attr(ATTR_NAMES.zone)
 
-    @property
-    def custom_tags(self) -> dict:
-        return {tag.split("=")[0]: tag.split("=")[1] for tag in self.custom_tags_list}
+    def __attrs_post_init__(self):
+        if isinstance(self.context, ResourceRemoteCommandContext):
+            self.reservation_details = self.context.remote_reservation
+        self.reservation_details = self.context.reservation
+
+    @cached_property
+    def reservation_info(self) -> ReservationInfo:
+        if isinstance(self.context, ResourceRemoteCommandContext):
+            return ReservationInfo.from_remote_resource_context(self.context)
+        return ReservationInfo.from_resource_context(self.context)
+
+    @cached_property
+    def tags(self) -> dict:
+        custom_tags = {tag.split("=")[0]: tag.split("=")[1] for tag in
+                       self.custom_tags_list}
+        default_tags = self._generate_default_tags()
+        return {**default_tags, **custom_tags}
+
+    def _generate_default_tags(self):
+        return {
+            "CreatedBy": "Quali",
+            "Blueprint": self.reservation_details.environment_name,
+            "Owner": self.reservation_details.owner_user,
+            "Domain": self.reservation_details.domain,
+            "ReservationId": self.reservation_details.reservation_id,
+        }
+
+    @classmethod
+    def from_context(
+        cls, context: RESOURCE_CONTEXT_TYPES, api: CloudShellAPISession
+    ) -> Self:
+        attrs = cls._ATTR_GETTER(cls, password_decryptor(api), context).get_attrs()
+        converter = cls._CONVERTER(cls, attrs)
+
+        return cls(
+            name=context.resource.name,
+            shell_name=context.resource.model,
+            family_name=context.resource.family,
+            address=context.resource.address,
+            api=api,
+            context=context,
+            # this should return kwargs but BaseConfig doesn't have any
+            **converter.convert(),  # noqa
+        )
 
     @classmethod
     def from_cs_resource_details(
