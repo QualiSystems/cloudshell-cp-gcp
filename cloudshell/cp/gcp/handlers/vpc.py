@@ -2,11 +2,11 @@ from __future__ import annotations
 
 import logging
 from contextlib import suppress
+from functools import cached_property
+from typing import TYPE_CHECKING
 
 from google.api_core.exceptions import NotFound
 from google.cloud import compute_v1
-from functools import cached_property
-from typing import TYPE_CHECKING
 
 from cloudshell.cp.gcp.handlers.base import BaseGCPHandler
 
@@ -17,7 +17,6 @@ logger = logging.getLogger(__name__)
 
 
 class VPCHandler(BaseGCPHandler):
-
     @cached_property
     def network_client(self):
         return compute_v1.NetworksClient(credentials=self.credentials)
@@ -26,8 +25,7 @@ class VPCHandler(BaseGCPHandler):
         """Get VPC instance by its name."""
         logger.info("Getting VPC")
         return self.network_client.get(
-            project=self.credentials.project_id,
-            network=network_name
+            project=self.credentials.project_id, network=network_name
         )
 
     def get_vpc_by_sandbox_id(self, sandbox_id: str) -> compute.Network:
@@ -59,8 +57,7 @@ class VPCHandler(BaseGCPHandler):
 
         # Create the VPC network
         operation = self.network_client.insert(
-            project=self.credentials.project_id,
-            network_resource=network
+            project=self.credentials.project_id, network_resource=network
         )
 
         # Wait for the operation to complete
@@ -71,8 +68,7 @@ class VPCHandler(BaseGCPHandler):
 
     def delete(self, network_name: str) -> None:
         operation = self.network_client.delete(
-            project=self.credentials.project_id,
-            network=network_name
+            project=self.credentials.project_id, network=network_name
         )
 
         # Wait for the operation to complete

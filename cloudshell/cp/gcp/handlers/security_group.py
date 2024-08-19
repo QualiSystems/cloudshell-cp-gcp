@@ -1,10 +1,10 @@
 from __future__ import annotations
 
 import logging
-
-from google.cloud import compute_v1
 from functools import cached_property
 from typing import TYPE_CHECKING
+
+from google.cloud import compute_v1
 
 from cloudshell.cp.gcp.handlers.base import BaseGCPHandler
 
@@ -19,23 +19,19 @@ class SecurityGroupHandler(BaseGCPHandler):
     def firewall_client(self):
         return compute_v1.FirewallsClient(credentials=self.credentials)
 
-    def create(
-            self,
-            security_group_name: str,
-            network_name: str,
-            rules
-    ) -> str:
+    def create(self, security_group_name: str, network_name: str, rules) -> str:
         """"""
         # Define the firewall settings
         firewall = compute_v1.Firewall()
         firewall.name = security_group_name
-        firewall.network = f"projects/{self.credentials.project_id}/global/networks/{network_name}"
+        firewall.network = (
+            f"projects/{self.credentials.project_id}/global/networks/{network_name}"
+        )
         firewall.allowed = rules
 
         # Create the firewall
         operation = self.firewall_client.insert(
-            project=self.credentials.project_id,
-            firewall_resource=firewall
+            project=self.credentials.project_id, firewall_resource=firewall
         )
 
         # Wait for the operation to complete
@@ -48,15 +44,13 @@ class SecurityGroupHandler(BaseGCPHandler):
         """Get Security Group instance by its name."""
         logger.info("Getting security group")
         return self.firewall_client.get(
-            project=self.credentials.project_id,
-            firewall=security_group_name
+            project=self.credentials.project_id, firewall=security_group_name
         )
 
     def delete(self, security_group_name: str) -> None:
         """Delete Security Group."""
         operation = self.firewall_client.delete(
-            project=self.credentials.project_id,
-            firewall=security_group_name
+            project=self.credentials.project_id, firewall=security_group_name
         )
 
         # Wait for the operation to complete
@@ -76,7 +70,7 @@ class SecurityGroupHandler(BaseGCPHandler):
         operation = self.firewall_client.update(
             project=self.credentials.project_id,
             firewall=security_group_name,
-            firewall_resource=firewall
+            firewall_resource=firewall,
         )
 
         # Wait for the operation to complete

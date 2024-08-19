@@ -1,26 +1,27 @@
 from __future__ import annotations
 
-from functools import cached_property
-
-from attr import define, Attribute
 from collections.abc import Callable
+from functools import cached_property
+from typing import TYPE_CHECKING
 
-from cloudshell.cp.core.reservation_info import ReservationInfo
-from cloudshell.helpers.scripts.cloudshell_scripts_helpers import \
-    ReservationContextDetails
-from cloudshell.shell.core.driver_context import ResourceRemoteCommandContext
+from attr import Attribute, define
 from typing_extensions import Self
-from typing_extensions import TYPE_CHECKING
 
-from cloudshell.api.cloudshell_api import ResourceInfo, CloudShellAPISession
+from cloudshell.api.cloudshell_api import CloudShellAPISession, ResourceInfo
+from cloudshell.cp.core.reservation_info import ReservationInfo
+from cloudshell.helpers.scripts.cloudshell_scripts_helpers import (
+    ReservationContextDetails,
+)
+from cloudshell.shell.core.driver_context import ResourceRemoteCommandContext
 from cloudshell.shell.standards.core.namespace_type import NameSpaceType
-from cloudshell.shell.standards.core.resource_conf import attr, BaseConfig
-from cloudshell.shell.standards.core.resource_conf.base_conf import password_decryptor
-from cloudshell.shell.standards.core.resource_conf.resource_attr import AttrMeta
+from cloudshell.shell.standards.core.resource_conf import BaseConfig, attr
 from cloudshell.shell.standards.core.resource_conf.attrs_getter import (
     MODEL,
-    AbsAttrsGetter, RESOURCE_CONTEXT_TYPES,
+    RESOURCE_CONTEXT_TYPES,
+    AbsAttrsGetter,
 )
+from cloudshell.shell.standards.core.resource_conf.base_conf import password_decryptor
+from cloudshell.shell.standards.core.resource_conf.resource_attr import AttrMeta
 
 from cloudshell.cp.gcp.helpers.converters import get_credentials
 
@@ -79,9 +80,7 @@ class GCPResourceConfig(BaseConfig):
     networks_in_use: str = attr(ATTR_NAMES.networks_in_use)
     keypairs_location: str = attr(ATTR_NAMES.keypairs_location)
     credentials: Credentials = attr(
-        ATTR_NAMES.json_keys,
-        is_password=True,
-        converter=get_credentials
+        ATTR_NAMES.json_keys, is_password=True, converter=get_credentials
     )
     custom_tags_list: list = attr(
         ATTR_NAMES.custom_tags,
@@ -102,8 +101,9 @@ class GCPResourceConfig(BaseConfig):
 
     @cached_property
     def tags(self) -> dict:
-        custom_tags = {tag.split("=")[0]: tag.split("=")[1] for tag in
-                       self.custom_tags_list}
+        custom_tags = {
+            tag.split("=")[0]: tag.split("=")[1] for tag in self.custom_tags_list
+        }
         default_tags = self._generate_default_tags()
         return {**default_tags, **custom_tags}
 
@@ -140,7 +140,9 @@ class GCPResourceConfig(BaseConfig):
         details: ResourceInfo,
         api: CloudShellAPISession,
     ) -> GCPResourceConfig:
-        attrs = ResourceInfoAttrGetter(cls, password_decryptor(api), details).get_attrs()
+        attrs = ResourceInfoAttrGetter(
+            cls, password_decryptor(api), details
+        ).get_attrs()
         converter = cls._CONVERTER(cls, attrs)
         return cls(
             name=details.Name,

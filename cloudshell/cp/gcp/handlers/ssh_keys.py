@@ -3,7 +3,7 @@ from __future__ import annotations
 import logging
 from contextlib import suppress
 from functools import cached_property
-from io import StringIO, BytesIO
+from io import BytesIO, StringIO
 
 from google.api_core.exceptions import NotFound
 from google.cloud import storage
@@ -18,7 +18,9 @@ class SSHKeysHandler(BaseGCPHandler):
     def storage_client(self):
         return storage.Client(credentials=self.credentials)
 
-    def upload_ssh_keys(self, bucket_name: str, folder_path: str, private_key: str, public_key: str) -> None:
+    def upload_ssh_keys(
+        self, bucket_name: str, folder_path: str, private_key: str, public_key: str
+    ) -> None:
         """Uploads a file to a GCP bucket in a specified folder."""
         bucket = self.storage_client.bucket(bucket_name)
         blob = bucket.blob(f"{folder_path}/private_key")
@@ -26,8 +28,7 @@ class SSHKeysHandler(BaseGCPHandler):
         blob = bucket.blob(f"{folder_path}/public_key")
         blob.upload_from_string(public_key)
         logger.info(
-            f"SSH keypair uploaded to {folder_path} in bucket"
-            f" {bucket_name}."
+            f"SSH keypair uploaded to {folder_path} in bucket" f" {bucket_name}."
         )
 
     def get_ssh_key_pair(self, bucket_name: str, folder_path: str) -> tuple[str, str]:
@@ -47,24 +48,22 @@ class SSHKeysHandler(BaseGCPHandler):
         return private_key, public_key
 
     def download_ssh_key(
-            self,
-            bucket_name: str,
-            file_path: str,
+        self,
+        bucket_name: str,
+        file_path: str,
     ) -> str:
         """Downloads a file from a GCP bucket."""
         bucket = self.storage_client.bucket(bucket_name)
         blob = bucket.blob(file_path)
         _file = BytesIO()
         blob.download_to_file(_file)
-        logger.info(
-            f"File {file_path} downloaded from bucket {bucket_name}."
-        )
+        logger.info(f"File {file_path} downloaded from bucket {bucket_name}.")
         return _file.read().decode()
 
     def delete_ssh_keys(
-            self,
-            bucket_name: str,
-            folder_path: str,
+        self,
+        bucket_name: str,
+        folder_path: str,
     ) -> None:
         """Deletes a file and its parent folder from a GCP bucket."""
         bucket = self.storage_client.bucket(bucket_name)

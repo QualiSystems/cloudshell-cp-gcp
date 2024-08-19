@@ -6,9 +6,7 @@ def read_file(file_name: str) -> str:
         return fo.read().strip()
 
 
-description = (
-    "<your package description>"
-)
+description = "<your package description>"
 
 
 setup(

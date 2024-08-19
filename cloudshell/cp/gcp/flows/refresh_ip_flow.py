@@ -1,4 +1,2 @@
-
-
 class GCPRefreshIPFlow:
     pass

@@ -1,9 +1,11 @@
 from logging import Logger
 
-from cloudshell.cp.core.flows.prepare_sandbox_infra import \
-    AbstractPrepareSandboxInfraFlow
-from cloudshell.cp.core.request_actions import \
-    PrepareSandboxInfraRequestActions as actions
+from cloudshell.cp.core.flows.prepare_sandbox_infra import (
+    AbstractPrepareSandboxInfraFlow,
+)
+from cloudshell.cp.core.request_actions import (
+    PrepareSandboxInfraRequestActions as actions,
+)
 from cloudshell.cp.core.reservation_info import ReservationInfo
 from cloudshell.cp.core.utils import generate_ssh_key_pair
 
@@ -16,10 +18,10 @@ from cloudshell.cp.gcp.resource_conf import GCPResourceConfig
 
 class PrepareGCPInfraFlow(AbstractPrepareSandboxInfraFlow):
     def __init__(
-            self,
-            logger: Logger,
-            resource_config: GCPResourceConfig,
-            reservation_info: ReservationInfo
+        self,
+        logger: Logger,
+        resource_config: GCPResourceConfig,
+        reservation_info: ReservationInfo,
     ):
         super().__init__(logger)
         self.config = resource_config
@@ -42,10 +44,11 @@ class PrepareGCPInfraFlow(AbstractPrepareSandboxInfraFlow):
         subnet_handler = SubnetHandler(self.config.credentials, self.config.region)
         for subnet_request in request_actions.prepare_subnets:
             subnet_results[
-                subnet_request.actionId] = subnet_handler.get_or_create_subnet(
+                subnet_request.actionId
+            ] = subnet_handler.get_or_create_subnet(
                 network_name=self._vpc,
                 ip_cidr_range=subnet_request.get_cidr(),
-                subnet_name=generate_name(subnet_request.get_alias())
+                subnet_name=generate_name(subnet_request.get_alias()),
             )
         return subnet_results
 
@@ -61,6 +64,6 @@ class PrepareGCPInfraFlow(AbstractPrepareSandboxInfraFlow):
                 bucket_name=self.config.keypairs_location,
                 folder_path=self.reservation_info.reservation_id,
                 private_key=private_key,
-                public_key=public_key
+                public_key=public_key,
             )
         return private_key

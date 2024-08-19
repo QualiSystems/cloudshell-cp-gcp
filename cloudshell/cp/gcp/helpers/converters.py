@@ -2,9 +2,10 @@ from __future__ import annotations
 
 import json
 from contextlib import suppress
-from typing_extensions import TYPE_CHECKING
+from typing import TYPE_CHECKING
 
 from google.oauth2 import service_account
+
 from cloudshell.cp.gcp.helpers.errors import AttributeGCPError
 
 if TYPE_CHECKING:

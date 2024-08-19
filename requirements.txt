@@ -1,5 +1,6 @@
 google-cloud-compute
 google-cloud-storage
+cloudshell-shell-standards~=2.0
 cloudshell-shell-core~=6.0
 cloudshell-shell-flows~=3.0
 attrs>=22,<24

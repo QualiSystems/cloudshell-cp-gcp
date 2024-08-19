@@ -1,6 +1,5 @@
 import re
 
-
 GCP_NAME_PATTERN = r"(?:[a-z](?:[-a-z0-9]{0,61}[a-z0-9])?)"
 pattern_remove_symbols = re.compile(rf"[^\w\d\-\.]")
 
