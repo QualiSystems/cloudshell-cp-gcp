@@ -1,5 +1,6 @@
-google-cloud-compute
-google-cloud-storage
+google-auth~=2.34
+google-cloud-compute~=1.19
+google-cloud-storage~=2.18
 cloudshell-shell-standards~=2.0
 cloudshell-shell-core~=6.0
 cloudshell-shell-flows~=3.0
