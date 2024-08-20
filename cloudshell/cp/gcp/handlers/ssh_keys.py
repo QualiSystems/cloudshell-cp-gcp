@@ -54,11 +54,11 @@ class SSHKeysHandler(BaseGCPHandler):
     ) -> str:
         """Downloads a file from a GCP bucket."""
         bucket = self.storage_client.bucket(bucket_name)
-        blob = bucket.blob(file_path)
-        _file = BytesIO()
-        blob.download_to_file(_file)
-        logger.info(f"File {file_path} downloaded from bucket {bucket_name}.")
-        return _file.read().decode()
+        blob = bucket.get_blob(file_path)
+        with blob.open() as file:
+            response = file.read()
+            logger.info(f"File {file_path} downloaded from bucket {bucket_name}.")
+            return response
 
     def delete_ssh_keys(
         self,

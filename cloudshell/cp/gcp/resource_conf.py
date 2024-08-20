@@ -9,9 +9,7 @@ from typing_extensions import Self
 
 from cloudshell.api.cloudshell_api import CloudShellAPISession, ResourceInfo
 from cloudshell.cp.core.reservation_info import ReservationInfo
-from cloudshell.helpers.scripts.cloudshell_scripts_helpers import (
-    ReservationContextDetails,
-)
+
 from cloudshell.shell.core.driver_context import ResourceRemoteCommandContext
 from cloudshell.shell.standards.core.namespace_type import NameSpaceType
 from cloudshell.shell.standards.core.resource_conf import BaseConfig, attr
