@@ -1,12 +1,18 @@
+from __future__ import annotations
+
 from cloudshell.cp.core.flows.cleanup_sandbox_infra import AbstractCleanupSandboxInfraFlow
 from cloudshell.cp.core.request_actions.models import CleanupNetwork
+from typing_extensions import TYPE_CHECKING
 
 from cloudshell.cp.gcp.handlers.ssh_keys import SSHKeysHandler
 from cloudshell.cp.gcp.handlers.vpc import VPCHandler
 from cloudshell.cp.gcp.helpers.name_generator import generate_vpc_name
-from cloudshell.cp.gcp.resource_conf import GCPResourceConfig
+
 
 from cloudshell.cp.core.request_actions import CleanupSandboxInfraRequestActions
+
+if TYPE_CHECKING:
+    from cloudshell.cp.gcp.resource_conf import GCPResourceConfig
 
 
 class CleanUpGCPInfraFlow(AbstractCleanupSandboxInfraFlow):

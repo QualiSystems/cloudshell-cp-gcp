@@ -67,11 +67,6 @@ class SSHKeysHandler(BaseGCPHandler):
     ) -> None:
         """Deletes a file and its parent folder from a GCP bucket."""
         bucket = self.storage_client.bucket(bucket_name)
-        # file_blob = bucket.blob(f"{folder_path}/{file_name}")
-        # file_blob.delete()
-        # logger.info(
-        #     f"File {file_name} deleted from folder {folder_path} in bucket {bucket_name}."
-        # )
 
         # Delete all blobs in the parent folder
         blobs = bucket.list_blobs(prefix=folder_path)
