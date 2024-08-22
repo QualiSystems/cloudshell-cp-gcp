@@ -16,7 +16,6 @@ from cloudshell.cp.gcp.helpers.name_generator import generate_name, generate_vpc
 
 if TYPE_CHECKING:
     from logging import Logger
-    from cloudshell.cp.core.reservation_info import ReservationInfo
     from cloudshell.cp.core.request_actions import (
         PrepareSandboxInfraRequestActions as RequestActions,
     )
@@ -27,17 +26,16 @@ if TYPE_CHECKING:
 class PrepareGCPInfraFlow(AbstractPrepareSandboxInfraFlow):
     logger: Logger
     config: GCPResourceConfig
-    reservation_info: ReservationInfo
     vpc: str = field(init=False, default=None)
 
-    def __attrs_pre_init__(self):
+    def __attrs_post_init__(self):
         super().__init__(self.logger)
 
     def prepare_common_objects(self, request_actions: RequestActions) -> None:
         """"""
         vpc_handler = VPCHandler(self.config.credentials)
         self.vpc = vpc_handler.get_or_create_vpc(
-            generate_vpc_name(self.reservation_info.reservation_id)
+            generate_vpc_name(self.config.reservation_info.reservation_id)
         )
 
     def prepare_cloud_infra(self, request_actions: RequestActions) -> str:
@@ -65,13 +63,13 @@ class PrepareGCPInfraFlow(AbstractPrepareSandboxInfraFlow):
         ssh_keys_handler = SSHKeysHandler(self.config.credentials)
         private_key, public_key = ssh_keys_handler.get_ssh_key_pair(
             bucket_name=self.config.keypairs_location,
-            folder_path=self.reservation_info.reservation_id,
+            folder_path=self.config.reservation_info.reservation_id,
         )
         if not private_key or not public_key:
             private_key, public_key = generate_ssh_key_pair()
             ssh_keys_handler.upload_ssh_keys(
                 bucket_name=self.config.keypairs_location,
-                folder_path=self.reservation_info.reservation_id,
+                folder_path=self.config.reservation_info.reservation_id,
                 private_key=private_key,
                 public_key=public_key,
             )

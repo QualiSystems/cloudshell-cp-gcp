@@ -35,12 +35,12 @@ class SSHKeysHandler(BaseGCPHandler):
         """Downloads a file from a GCP bucket."""
         public_key = None
         private_key = None
-        with suppress(NotFound):
+        with suppress(AttributeError):
             private_key = self.download_ssh_key(
                 bucket_name=bucket_name,
                 file_path=f"{folder_path}/private_key",
             )
-        with suppress(NotFound):
+        with suppress(AttributeError):
             public_key = self.download_ssh_key(
                 bucket_name=bucket_name,
                 file_path=f"{folder_path}/public_key",
