@@ -1,7 +1,8 @@
 from __future__ import annotations
 
 from attr import define
-from cloudshell.cp.core.flows.cleanup_sandbox_infra import AbstractCleanupSandboxInfraFlow
+from cloudshell.cp.core.flows.cleanup_sandbox_infra import \
+    AbstractCleanupSandboxInfraFlow
 from cloudshell.cp.core.request_actions.models import CleanupNetwork
 from typing_extensions import TYPE_CHECKING
 
@@ -9,7 +10,6 @@ from cloudshell.cp.gcp.handlers.ssh_keys import SSHKeysHandler
 from cloudshell.cp.gcp.handlers.subnet import SubnetHandler
 from cloudshell.cp.gcp.handlers.vpc import VPCHandler
 from cloudshell.cp.gcp.helpers.name_generator import generate_vpc_name
-
 
 from cloudshell.cp.core.request_actions import CleanupSandboxInfraRequestActions
 
@@ -49,11 +49,21 @@ class CleanUpGCPInfraFlow(AbstractCleanupSandboxInfraFlow):
         self.logger.info(f"Deleting all components of VPC: {network_name}")
 
         # try:
-        # Delete subnets
+        network_handler = VPCHandler(self.config.credentials)
+        vpc = network_handler.get_vpc_by_name(network_name)
+
+        # Get subnets
+        subnets = {x.split("/")[-1] for x in vpc.subnetworks}
         subnet_handler = SubnetHandler(self.config.credentials, self.config.region)
-        for subnet in subnet_handler.list_subnets_by_network(network_name):
-            self.logger.info(f"Deleting subnet: {subnet.name}")
-            subnet_handler.delete(subnet_name=subnet.name)
+        if not subnets:
+            subnets = {x.name for x in subnet_handler.list_subnets_by_network(
+                network_name
+                )
+            }
+        # Delete subnets
+        for subnet in subnets:
+            self.logger.info(f"Deleting subnet: {subnet}")
+            subnet_handler.delete(subnet_name=subnet)
 
         # Delete firewall rules
         # firewall_rules = self.firewall_client.list(project=self.credentials.project_id, filter=f"network={network_name}")
@@ -73,8 +83,4 @@ class CleanUpGCPInfraFlow(AbstractCleanupSandboxInfraFlow):
         network_handler.delete(network_name=network_name)
 
         self.logger.info(f"All components of VPC '{network_name}' deleted "
-                     f"successfully.")
-
-        # except Exception as e:
-        #     self.logger.error(f"Failed to delete components of VPC '{network_name}'. "
-        #                   f"Error: {str(e)}")
+                         f"successfully.")
