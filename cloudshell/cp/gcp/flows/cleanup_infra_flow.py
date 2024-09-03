@@ -1,11 +1,15 @@
 from __future__ import annotations
 
+from contextlib import suppress
+
 from attr import define
 from cloudshell.cp.core.flows.cleanup_sandbox_infra import \
     AbstractCleanupSandboxInfraFlow
 from cloudshell.cp.core.request_actions.models import CleanupNetwork
+from google.api_core.exceptions import NotFound
 from typing_extensions import TYPE_CHECKING
 
+from cloudshell.cp.gcp.handlers.firewall_rule import FirewallRuleHandler
 from cloudshell.cp.gcp.handlers.ssh_keys import SSHKeysHandler
 from cloudshell.cp.gcp.handlers.subnet import SubnetHandler
 from cloudshell.cp.gcp.handlers.vpc import VPCHandler
@@ -66,11 +70,10 @@ class CleanUpGCPInfraFlow(AbstractCleanupSandboxInfraFlow):
             subnet_handler.delete(subnet_name=subnet)
 
         # Delete firewall rules
-        # firewall_rules = self.firewall_client.list(project=self.credentials.project_id, filter=f"network={network_name}")
-        # for rule in firewall_rules:
-        #     self.logger.info(f"Deleting firewall rule: {rule.name}")
-        #     operation = self.firewall_client.delete(project=self.credentials.project_id, firewall=rule.name)
-        #     self.wait_for_operation(name=operation.name)
+        firewall_handler = FirewallRuleHandler(self.config.credentials)
+        for rule in firewall_handler.list_firewall_rules_by_network(network_name):
+            self.logger.info(f"Deleting firewall rule: {rule.name}")
+            firewall_handler.delete(rule_name=rule.name)
 
         # Delete routes
         # routes = self.route_client.list(project=self.credentials.project_id, filter=f"network={network_name}")
@@ -81,6 +84,10 @@ class CleanUpGCPInfraFlow(AbstractCleanupSandboxInfraFlow):
 
         network_handler = VPCHandler(self.config.credentials)
         network_handler.delete(network_name=network_name)
+
+        with suppress(NotFound):
+            network_handler.get_vpc_by_name(network_name)
+            raise Exception(f"Failed to delete VPC '{network_name}'.")
 
         self.logger.info(f"All components of VPC '{network_name}' deleted "
                          f"successfully.")

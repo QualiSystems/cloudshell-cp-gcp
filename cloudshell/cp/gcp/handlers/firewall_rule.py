@@ -7,6 +7,7 @@ from typing import TYPE_CHECKING
 
 from google.api_core.exceptions import NotFound
 from google.cloud import compute_v1
+from google.cloud.compute_v1.services.firewalls.pagers import ListPager
 from google.cloud.compute_v1.types import Allowed, Denied
 
 from cloudshell.cp.gcp.handlers.base import BaseGCPHandler
@@ -34,33 +35,19 @@ class FirewallRuleHandler(BaseGCPHandler):
         priorities = [rule.priority for rule in firewall.allowed]
         return min(priorities) - 1 if priorities else 1000
 
-    # def create(
-    #         self,
-    #         firewall_policy_name: str,
-    #         network_name: str,
-    #         allow_policy_rules: list,
-    #         deny_policy_rules: list,
-    # ) -> Firewall:
-    #     """"""
-    #     # Define the firewall settings
-    #     firewall = compute_v1.AddRuleRegionNetworkFirewallPolicyRequest()
-    #     firewall.name = firewall_policy_name
-    #     firewall.network = (
-    #         f"projects/{self.credentials.project_id}/global/networks/{network_name}"
-    #     )
-    #     firewall.allowed = allow_policy_rules
-    #     firewall.denied = deny_policy_rules
-    #
-    #     # Create the firewall
-    #     operation = self.firewall_client.insert(
-    #         project=self.credentials.project_id, firewall_resource=firewall
-    #     )
-    #
-    #     # Wait for the operation to complete
-    #     self.wait_for_operation(name=operation.name)
-    #
-    #     logger.info(f"Security group '{firewall_policy_name}' created successfully.")
-    #     return self.get_firewall_policy_by_name(firewall_policy_name).name
+    def list_firewall_rules_by_network(self, network_name) -> list[Firewall]:
+        """List all Security Groups."""
+        rules = []
+        request = compute_v1.ListFirewallsRequest(project=self.credentials.project_id)
+
+        for firewall in self.firewall_client.list(request=request):
+            if firewall.network.endswith(
+                    f"projects/{self.credentials.project_id}"
+                    f"/global/networks/{network_name}"
+            ):
+                rules.append(firewall)
+
+        return rules
 
     def get_firewall_rule_by_name(self, rule_name: str) -> (
             Firewall):
@@ -69,27 +56,6 @@ class FirewallRuleHandler(BaseGCPHandler):
         return self.firewall_client.get(
             project=self.credentials.project_id, firewall=rule_name
         )
-
-    # def get_or_create_firewall_policy_by_name(
-    #         self,
-    #         firewall_policy_name: str,
-    #         network: str,
-    #         allow_policy_rules: list,
-    #         deny_policy_rules: list
-    # ) -> Firewall:
-    #     """Get Security Group instance by its name."""
-    #     logger.info("Getting security group")
-    #     with suppress(NotFound):
-    #         return self.firewall_client.get(
-    #             project=self.credentials.project_id,
-    #             firewall=firewall_policy_name,
-    #         )
-    #     return self.create(
-    #         firewall_policy_name,
-    #         network,
-    #         allow_policy_rules,
-    #         deny_policy_rules
-    #     )
 
     def delete(self, rule_name: str) -> None:
         """Delete Security Group."""
