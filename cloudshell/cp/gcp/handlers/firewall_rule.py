@@ -23,16 +23,16 @@ class FirewallRuleHandler(BaseGCPHandler):
     def firewall_client(self):
         return compute_v1.FirewallsClient(credentials=self.credentials)
 
-    def get_higher_priority(self, security_group_name: str) -> int:
+    def get_higher_priority(self, network_name: str) -> int:
         """Get the next available priority for the security group."""
-        firewall = self.get_firewall_policy_by_name(security_group_name)
-        priorities = [rule.priority for rule in firewall.allowed]
-        return max(priorities) + 1 if priorities else 1000
+        rules = self.list_firewall_rules_by_network(network_name)
+        priorities = [rule.priority for rule in (rules.allowed | rules.denied)]
+        return max(priorities) + 1 if priorities else 4000
 
-    def get_lower_priority(self, security_group_name: str) -> int:
+    def get_lower_priority(self, network_name: str) -> int:
         """Get the next available priority for the security group."""
-        firewall = self.get_firewall_policy_by_name(security_group_name)
-        priorities = [rule.priority for rule in firewall.allowed]
+        rules = self.list_firewall_rules_by_network(network_name)
+        priorities = [rule.priority for rule in (rules.allowed | rules.denied)]
         return min(priorities) - 1 if priorities else 1000
 
     def list_firewall_rules_by_network(self, network_name) -> list[Firewall]:
@@ -74,8 +74,9 @@ class FirewallRuleHandler(BaseGCPHandler):
             network_name: str,
             protocol: str,
             src_cidr: str,
-            dst_cidr: str,
-            ports: list[int] = None,
+            dst_cidr: str | None = None,
+            network_tag: str | None = None,
+            ports: list[str] = None,
             allowed: bool = True,
             priority: int = None
     ):
@@ -87,6 +88,7 @@ class FirewallRuleHandler(BaseGCPHandler):
             protocol,
             src_cidr,
             dst_cidr,
+            network_tag,
             ports,
             allowed,
             priority
@@ -98,8 +100,9 @@ class FirewallRuleHandler(BaseGCPHandler):
             network_name: str,
             protocol: str,
             src_cidr: str,
-            dst_cidr: str,
-            ports: list[int] = None,
+            dst_cidr: str | None = None,
+            network_tag: str | None = None,
+            ports: list[str] = None,
             allowed: bool = True,
             priority: int = None
     ):
@@ -117,6 +120,7 @@ class FirewallRuleHandler(BaseGCPHandler):
                 source_ranges=[src_cidr],  # Specify source IP ranges
                 destination_ranges=[dst_cidr],  # Specify destination IP ranges
                 priority=priority,
+                target_tags=[network_tag] if network_tag else None
             )
         else:
             ports_rule = self.add_deny_rule(protocol, ports)
@@ -198,14 +202,14 @@ class FirewallRuleHandler(BaseGCPHandler):
         print(f"Firewall rule '{firewall_name}' created.")
         return firewall_rule
 
-    def add_allowed_rule(self, protocol: str, ports: list[int]) -> \
+    def add_allowed_rule(self, protocol: str, ports: list[str]) -> \
             Allowed:
         """Add a new rule to an existing firewall policy."""
         new_rule = {
             "I_p_protocol": protocol,
         }
         if ports:
-            new_rule["ports"] = list(map(str, ports))
+            new_rule["ports"] = ports
         # Add the new rule
         return Allowed(**new_rule)
 

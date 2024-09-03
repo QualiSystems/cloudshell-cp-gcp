@@ -1,4 +1,5 @@
 from functools import cached_property
+from typing import List
 
 from cloudshell.cp.gcp.handlers.firewall_policy import FirewallPolicyHandler
 from cloudshell.cp.gcp.handlers.firewall_rule import FirewallRuleHandler
@@ -11,10 +12,9 @@ class FirewallPolicyActions:
     NSG_DENY_PRV_RULE_NAME_TPL = "deny_internet_traffic_to_priv_subnet_{subnet_cidr}"
     VM_NSG_NAME_TPL = "rule_{vm_name}"
     INBOUND_RULE_DIRECTION = "inbound"
-    CUSTOM_NSG_RULE_PREFIX = "rule-"
     CUSTOM_NSG_RULE_NAME_TPL = (
-        f"{CUSTOM_NSG_RULE_PREFIX}{{vm_name}}_{{dst_address}}_"
-        f"{{dst_port_range}}_{{protocol}}"
+        "rule-{vm_name}-{dst_address}-"
+        "{dst_port_range}-{protocol}"
     )
     NSG_ADD_MGMT_RULE_PRIORITY = 4000
     NSG_ADD_MGMT_RULE_NAME_TPL = "allow-{mgmt_network}-to-{sandbox_cidr}"
@@ -187,6 +187,42 @@ class FirewallPolicyActions:
             allowed=False,
             protocol="all",
             priority=self.NSG_DENY_OTHER_SB_RULE_PRIORITY,
+        )
+
+    def create_inbound_port_rule(
+            self,
+            network_name: str,
+            vm_name: str,
+            network_tag: str,
+            src_address: str,
+            port_range: list[str],
+            protocol: str = "tcp"
+    ):
+        """Create inbound port rule.
+
+        """
+        ports_name = "-".join(
+            map(lambda x: str(x).replace("-", "--"), port_range)
+        )
+        priority = self.fr_handler.get_higher_priority(network_name=network_name)
+        return self.fr_handler.get_or_create_ingress_firewall_rule(
+            rule_name=self.CUSTOM_NSG_RULE_NAME_TPL.format(
+                vm_name=vm_name,
+                dst_address=src_address.replace(
+                    "/", "--"
+                ).replace(
+                    ".", "-"
+                ),
+                dst_port_range=ports_name,
+                protocol=protocol,
+            ),
+            network_name=self.config.network_name,
+            src_cidr=src_address,
+            ports=port_range,
+            allowed=True,
+            protocol=protocol,
+            priority=priority,
+            network_tag=network_tag,
         )
 
     # def _create_nsg_allow_mgmt_vnet_rule(
