@@ -8,6 +8,8 @@ from cloudshell.cp.core.flows.prepare_sandbox_infra import (
 )
 
 from cloudshell.cp.core.utils import generate_ssh_key_pair
+
+from cloudshell.cp.gcp.actions.firewall_policy_actions import FirewallPolicyActions
 from cloudshell.cp.gcp.handlers.ssh_keys import SSHKeysHandler
 from cloudshell.cp.gcp.handlers.subnet import SubnetHandler
 from cloudshell.cp.gcp.handlers.vpc import VPCHandler
@@ -37,6 +39,7 @@ class PrepareGCPInfraFlow(AbstractPrepareSandboxInfraFlow):
         self.vpc = vpc_handler.get_or_create_vpc(
             generate_vpc_name(self.config.reservation_info.reservation_id)
         )
+        self._create_firewall_rules(request_actions, self.vpc)
 
     def prepare_cloud_infra(self, request_actions: RequestActions) -> str:
         """Create vpc using vpc handler."""
@@ -74,3 +77,19 @@ class PrepareGCPInfraFlow(AbstractPrepareSandboxInfraFlow):
                 public_key=public_key,
             )
         return private_key
+
+    def _create_firewall_rules(self, request_actions, network_name):
+        """Create all required NSG rules.
+
+        :param request_actions:
+        :return:
+        """
+        fp_actions = FirewallPolicyActions(
+            resource_config=self.config,
+            firewall_policy_name=f"quali-"
+                                 f"{self.config.reservation_info.reservation_id}",
+            reservation_info=self.config.reservation_info,
+            # cancellation_manager=None,
+            logger=self.logger,
+        )
+        fp_actions.create_firewall_rules(request_actions, network_name)
