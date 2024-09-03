@@ -63,6 +63,7 @@ class GCPAttributeNames:
     json_keys = "Credentials Json"
     zone = "Availability Zone"
     keypairs_location = "Keypairs Location"
+    additional_mgmt_networks = "Additional Mgmt Networks"
     machine_type = "Machine Type"
     custom_tags = "Custom Tags"
     networks_in_use = "Networks in use"
@@ -77,6 +78,7 @@ class GCPResourceConfig(BaseConfig):
     machine_type: str = attr(ATTR_NAMES.machine_type)
     networks_in_use: str = attr(ATTR_NAMES.networks_in_use)
     keypairs_location: str = attr(ATTR_NAMES.keypairs_location)
+    additional_mgmt_networks: list = attr(ATTR_NAMES.additional_mgmt_networks)
     credentials: Credentials = attr(
         ATTR_NAMES.json_keys, is_password=True, converter=get_credentials
     )
