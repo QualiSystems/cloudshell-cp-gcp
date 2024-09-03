@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import logging
+import random
 from functools import cached_property
 from typing import TYPE_CHECKING
 
@@ -8,6 +9,7 @@ from attrs import define
 from google.cloud import compute_v1
 
 from cloudshell.cp.gcp.handlers.base import BaseGCPHandler
+from cloudshell.cp.gcp.helpers.errors import AttributeGCPError
 
 if TYPE_CHECKING:
     from google.cloud.compute_v1.types import compute
@@ -16,56 +18,51 @@ logger = logging.getLogger(__name__)
 
 
 @define
-class VMHandler(BaseGCPHandler):
+class InstanceHandler(BaseGCPHandler):
     zone: str
+    region: str | None = None
 
     @cached_property
     def instance_client(self):
         return compute_v1.InstancesClient(credentials=self.credentials)
 
-    def create(
-        self,
-        vm_name: str,
-        machine_type: str,
-        image_project: str,
-        image_family: str,
-        subnets: list[compute.Subnetwork],
-        zone: str,
-        tags: dict = None,
-    ) -> str:
+    def zone_checker(self):
+        def decorator(func):
+            def wrapper(*args, **kwargs):
+                if not kwargs.get("zone"):
+                    if self.zone:
+                        kwargs.update({"zone": self.zone})
+                    else:
+                        if self.region:
+                            zones = self.get_zones(region=self.region)
+                            zone = random.choice(zones)
+                            kwargs.update({"zone": zone.name})
+                        else:
+                            raise AttributeGCPError("Zone cannot be empty.")
+                operation = func(*args, **kwargs)
+                return operation
+            return wrapper
+        return decorator
+
+    @zone_checker()
+    def deploy(self, instance: compute.Instance, *, zone: str | None = None) -> int:
         """Create Virtual Machine."""
-        if not zone:
-            zone = self.zone
-
-        # Define the VM settings
-        vm = compute_v1.Instance()
-        vm.name = vm_name
-        vm.machine_type = f"projects/{self.credentials.project_id}/zones/{zone}/machineTypes/{machine_type}"
-        vm.tags = tags or {}
-        vm.network_interfaces = self._prepare_subnets_attachments(subnets)
-        vm.disks = [
-            {
-                "boot": True,
-                "auto_delete": True,
-                "initialize_params": {
-                    "source_image": f"projects/{image_project}/global/images/family/{image_family}",
-                },
-            }
-        ]
-
-        # Create the VM
         operation = self.instance_client.insert(
-            project=self.credentials.project_id, zone=zone, instance_resource=vm
+            project=self.credentials.project_id,
+            zone=zone,
+            instance_resource=instance
         )
 
         # Wait for the operation to complete
         self.wait_for_operation(name=operation.name, zone=zone)
 
-        logger.info(f"VM '{vm_name}' created successfully.")
-        return self.get_vm_by_name(vm_name=vm_name, zone=zone).id
+        logger.info(f"VM '{instance.name}' created successfully.")
+        return instance.name
+        # return self.get_vm_by_name(vm_name=instance.name, zone=zone).id
 
     def _prepare_subnets_attachments(
-        self, subnets: list[compute.Subnetwork]
+            self,
+            subnets: list[compute.Subnetwork]
     ) -> list[dict[str:str]]:
         return [
             {
@@ -75,40 +72,40 @@ class VMHandler(BaseGCPHandler):
             for subnet in subnets
         ]
 
-    def get_vm_by_name(self, vm_name: str, zone: str) -> compute.Instance:
+    @zone_checker()
+    def get_vm_by_name(self, instance_name: str, *, zone: str) -> compute.Instance:
         """Get VM instance by its name."""
-        if not zone:
-            zone = self.zone
         logger.info("Getting VM")
         return self.instance_client.get(
-            project=self.credentials.project_id, zone=zone, instance=vm_name
+            project=self.credentials.project_id, zone=zone, instance=instance_name
         )
 
+    @zone_checker()
     def get_vms_by_tag_value(
-        self, tag: str, tag_value: str, zone: str
+        self,
+        tag: str,
+        tag_value: str,
+        *,
+        zone: str
     ) -> list[compute.Instance]:
         """Get Virtual Machine instances by tag."""
-        if not zone:
-            zone = self.zone
-        logger.info("Getting VMs")
+        logger.info("Getting VMs by tag")
         vms = self.instance_client.list(project=self.credentials.project_id, zone=zone)
 
         # Filter VMs by tag value
         return [vm for vm in vms if tag_value in vm.tags.get(tag)]
 
-    def get_vm_by_id(self, vm_id: str, zone: str) -> compute.Instance:
+    @zone_checker()
+    def get_vm_by_id(self, vm_id: str, *, zone: str) -> compute.Instance:
         """Get Virtual Machine instance by its ID."""
-        if not zone:
-            zone = self.zone
-        logger.info("Getting VM")
+        logger.info("Getting VM by VM ID")
         return self.instance_client.get(
             project=self.credentials.project_id, zone=zone, instance=vm_id
         )
 
-    def delete(self, vm_name: str, zone: str) -> None:
+    @zone_checker()
+    def delete(self, vm_name: str, *, zone: str) -> None:
         """Delete Virtual Machine instance."""
-        if not zone:
-            zone = self.zone
         operation = self.instance_client.delete(
             project=self.credentials.project_id, zone=zone, instance=vm_name
         )
@@ -118,10 +115,9 @@ class VMHandler(BaseGCPHandler):
 
         logger.info(f"VM '{vm_name}' deleted successfully.")
 
-    def start(self, vm_name: str, zone: str) -> None:
+    @zone_checker()
+    def start(self, vm_name: str, *, zone: str) -> None:
         """Power On Virtual Machine."""
-        if not zone:
-            zone = self.zone
         operation = self.instance_client.start(
             project=self.credentials.project_id, zone=zone, instance=vm_name
         )
@@ -131,10 +127,9 @@ class VMHandler(BaseGCPHandler):
 
         logger.info(f"VM '{vm_name}' started successfully.")
 
-    def stop(self, vm_name: str, zone: str) -> None:
+    @zone_checker()
+    def stop(self, vm_name: str, *, zone: str) -> None:
         """Power Off Virtual Machine."""
-        if not zone:
-            zone = self.zone
         operation = self.instance_client.stop(
             project=self.credentials.project_id, zone=zone, instance=vm_name
         )
@@ -144,10 +139,9 @@ class VMHandler(BaseGCPHandler):
 
         logger.info(f"VM '{vm_name}' stopped successfully.")
 
-    def add_tag(self, vm_name: str, zone: str, tag: dict[str:str]) -> None:
+    @zone_checker()
+    def add_tag(self, vm_name: str, tag: dict[str, str], *, zone: str) -> None:
         """Add tag to existed Virtual Machine."""
-        if not zone:
-            zone = self.zone
         # Get the existing VM
         vm = self.get_vm_by_name(vm_name, zone)
 
@@ -167,10 +161,9 @@ class VMHandler(BaseGCPHandler):
 
         logger.info(f"Tag '{tag}' added to VM '{vm_name}'.")
 
-    def remove_tag(self, vm_name: str, zone: str, tag) -> None:
+    @zone_checker()
+    def remove_tag(self, vm_name: str, tag: str, *, zone: str) -> None:
         """Remove tag."""
-        if not zone:
-            zone = self.zone
         # Get the existing VM
         vm = self.get_vm_by_name(vm_name, zone)
 
@@ -190,10 +183,9 @@ class VMHandler(BaseGCPHandler):
 
         logger.info(f"Tag '{tag}' removed from VM '{vm_name}'.")
 
-    def add_metadata(self, vm_name: str, zone: str, key: str, value: str) -> None:
+    @zone_checker()
+    def add_metadata(self, vm_name: str, key: str, value: str, *, zone: str) -> None:
         """Add metadata record."""
-        if not zone:
-            zone = self.zone
         # Get the existing VM
         vm = self.get_vm_by_name(vm_name, zone)
 
@@ -213,10 +205,9 @@ class VMHandler(BaseGCPHandler):
 
         logger.info(f"Metadata '{key}={value}' added to VM '{vm_name}'.")
 
-    def remove_metadata(self, vm_name: str, zone: str, key: str) -> None:
+    @zone_checker()
+    def remove_metadata(self, vm_name: str, key: str, *, zone: str) -> None:
         """Remove metadata record."""
-        if not zone:
-            zone = self.zone
         # Get the existing VM
         vm = self.get_vm_by_name(vm_name, zone)
 
@@ -238,12 +229,16 @@ class VMHandler(BaseGCPHandler):
 
         logger.info(f"Metadata '{key}' removed from VM '{vm_name}'.")
 
+    @zone_checker()
     def add_network_interface(
-        self, vm_name: str, zone: str, network_name: str, subnet_name: str
+            self,
+            vm_name: str,
+            network_name: str,
+            subnet_name: str,
+            *,
+            zone: str
     ) -> None:
         """Add Network interface to existed Virtual Machine instance."""
-        if not zone:
-            zone = self.zone
         # Get the existing VM
         vm = self.get_vm_by_name(vm_name, zone)
 
@@ -268,12 +263,11 @@ class VMHandler(BaseGCPHandler):
 
         logger.info(f"Network interface added to VM '{vm_name}'.")
 
+    @zone_checker()
     def remove_network_interface(
-        self, vm_name: str, zone: str, network_name: str, subnet_name: str
+        self, vm_name: str, network_name: str, subnet_name: str, *, zone: str
     ) -> None:
         """Delete Network Interface from Virtual Machine."""
-        if not zone:
-            zone = self.zone
         # Get the existing VM
         vm = self.get_vm_by_name(vm_name, zone)
 
@@ -300,18 +294,18 @@ class VMHandler(BaseGCPHandler):
 
         logger.info(f"Network interface removed from VM '{vm_name}'.")
 
+    @zone_checker()
     def add_disk(
-        self,
-        vm_name: str,
-        zone: str,
-        disk_name: str,
-        disk_type: str,
-        disk_size_gb: float,
-        source_image: str,
+            self,
+            vm_name: str,
+            disk_name: str,
+            disk_type: str,
+            disk_size_gb: float,
+            source_image: str,
+            *,
+            zone: str
     ) -> None:
         """Add disk to Virtual Machine."""
-        if not zone:
-            zone = self.zone
         # Get the existing VM
         vm = self.get_vm_by_name(vm_name, zone)
 
@@ -338,10 +332,9 @@ class VMHandler(BaseGCPHandler):
 
         logger.info(f"Disk '{disk_name}' added to VM '{vm_name}'.")
 
-    def remove_disk(self, vm_name: str, zone: str, disk_name: str) -> None:
+    @zone_checker()
+    def remove_disk(self, vm_name: str, disk_name: str, *, zone: str) -> None:
         """Remove disk from Virtual Machine."""
-        if not zone:
-            zone = self.zone
         # Get the existing VM
         vm = self.get_vm_by_name(vm_name, zone)
 
@@ -363,12 +356,11 @@ class VMHandler(BaseGCPHandler):
 
         logger.info(f"Disk '{disk_name}' removed from VM '{vm_name}'.")
 
+    @zone_checker()
     def add_access_config(
-        self, vm_name: str, zone: str, network_name: str, external_ip: str
+        self, vm_name: str, network_name: str, external_ip: str, *, zone: str
     ) -> None:
         """Add Access List Configuration."""
-        if not zone:
-            zone = self.zone
         # Get the existing VM
         vm = self.get_vm_by_name(vm_name, zone)
 
@@ -395,10 +387,9 @@ class VMHandler(BaseGCPHandler):
 
         logger.info(f"Access config added to VM '{vm_name}'.")
 
-    def remove_access_config(self, vm_name: str, zone: str, external_ip: str) -> None:
+    @zone_checker()
+    def remove_access_config(self, vm_name: str, external_ip: str, *, zone: str) -> None:
         """Remove Access List Configuration."""
-        if not zone:
-            zone = self.zone
         # Get the existing VM
         vm = self.get_vm_by_name(vm_name, zone)
 
@@ -420,12 +411,11 @@ class VMHandler(BaseGCPHandler):
 
         logger.info(f"Access config removed from VM '{vm_name}'.")
 
+    @zone_checker()
     def add_firewall_rule(
-        self, vm_name: str, zone: str, security_group_name: str
+        self, vm_name: str, security_group_name: str, *, zone: str
     ) -> None:
         """Add Firewall Rule."""
-        if not zone:
-            zone = self.zone
         # Get the existing VM
         vm = self.get_vm_by_name(vm_name, zone)
 
@@ -445,12 +435,11 @@ class VMHandler(BaseGCPHandler):
 
         logger.info(f"Firewall rule added to VM '{vm_name}'.")
 
+    @zone_checker()
     def remove_firewall_rule(
-        self, vm_name: str, zone: str, security_group_name: str
+        self, vm_name: str, security_group_name: str, *, zone: str
     ) -> None:
         """Remove Firewall Rule."""
-        if not zone:
-            zone = self.zone
         # Get the existing VM
         vm = self.get_vm_by_name(vm_name, zone)
 
@@ -470,12 +459,11 @@ class VMHandler(BaseGCPHandler):
 
         logger.info(f"Firewall rule removed from VM '{vm_name}'.")
 
+    @zone_checker()
     def add_service_account(
-        self, vm_name: str, zone: str, service_account_email: str
+        self, vm_name: str, service_account_email: str, *, zone: str
     ) -> None:
         """Add Service Account configuration."""
-        if not zone:
-            zone = self.zone
         # Get the existing VM
         vm = self.get_vm_by_name(vm_name, zone)
 
@@ -500,12 +488,11 @@ class VMHandler(BaseGCPHandler):
 
         logger.info(f"Service account added to VM '{vm_name}'.")
 
+    @zone_checker()
     def remove_service_account(
-        self, vm_name: str, zone: str, service_account_email: str
+        self, vm_name: str, service_account_email: str, *, zone: str
     ) -> None:
         """Remove Service Account configuration."""
-        if not zone:
-            zone = self.zone
         # Get the existing VM
         vm = self.get_vm_by_name(vm_name, zone)
 
@@ -527,10 +514,9 @@ class VMHandler(BaseGCPHandler):
 
         logger.info(f"Service account removed from VM '{vm_name}'.")
 
-    def add_public_key(self, vm_name: str, zone: str, key: str) -> None:
+    @zone_checker()
+    def add_public_key(self, vm_name: str, key: str, *, zone: str) -> None:
         """Add Public Key."""
-        if not zone:
-            zone = self.zone
         # Get the existing VM
         vm = self.get_vm_by_name(vm_name, zone)
 
@@ -550,10 +536,9 @@ class VMHandler(BaseGCPHandler):
 
         logger.info(f"Public key added to VM '{vm_name}'.")
 
-    def add_public_static_ip(self, vm_name: str, zone: str, ip: str) -> None:
+    @zone_checker()
+    def add_public_static_ip(self, vm_name: str, ip: str, *, zone: str) -> None:
         """Add Public Static IP."""
-        if not zone:
-            zone = self.zone
         # Get the existing VM
         vm = self.get_vm_by_name(vm_name, zone)
 
@@ -580,10 +565,9 @@ class VMHandler(BaseGCPHandler):
 
         logger.info(f"Public static IP added to VM '{vm_name}'.")
 
-    def remove_public_static_ip(self, vm_name: str, zone: str, ip: str) -> None:
+    @zone_checker()
+    def remove_public_static_ip(self, vm_name: str, ip: str, *, zone: str) -> None:
         """Remove Public Static IP."""
-        if not zone:
-            zone = self.zone
         # Get the existing VM
         vm = self.get_vm_by_name(vm_name, zone)
 

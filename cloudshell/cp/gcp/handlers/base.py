@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import random
 from typing import TYPE_CHECKING
 
 from attrs import define
@@ -8,6 +9,7 @@ from google.cloud import compute_v1
 
 if TYPE_CHECKING:
     from google.auth.credentials import Credentials
+    from google.cloud.compute_v1.types import compute
 
 
 @define
@@ -43,27 +45,24 @@ class BaseGCPHandler:
 
         operation_client.wait(**wait_attributes)
 
-    # def wait_to_complete(self, timeout: float):
-    #     def decorator(func):
-    #         def wrapper(*args, **kwargs):
-    #             operation = func(*args, **kwargs)
-    #
-    #             wait_attributes = {
-    #                 "project": self.credentials.project_id,
-    #                 "operation": operation.name,
-    #             }
-    #
-    #             if timeout:
-    #                 wait_attributes["timeout"] = timeout
-    #
-    #             if "zone" in kwargs:
-    #                 operation_client = compute_v1.ZoneOperationsClient()
-    #                 wait_attributes["zone"] = kwargs["zone"]
-    #             else:
-    #                 operation_client = compute_v1.GlobalOperationsClient()
-    #
-    #             operation_client.wait(**wait_attributes)
-    #
-    #             return operation
-    #         return wrapper
-    #     return decorator
+    def get_regions(self) -> list[compute.Region]:
+        """Retrieves the list of Region resources available to the specified project."""
+        client = compute_v1.RegionsClient(credentials=self.credentials)
+        request = compute_v1.ListRegionsRequest(project=self.credentials.project_id)
+        regions = client.list(request=request)
+
+        return list(regions)
+
+    def get_zones(self, region: str = None) -> list[compute.Zone]:
+        """Retrieves the list of Zone resources available to the specified project.
+
+        Can be filtered by region.
+        """
+        client = compute_v1.ZonesClient(credentials=self.credentials)
+        request = compute_v1.ListZonesRequest(project=self.credentials.project_id)
+        zones = client.list(request=request)
+
+        if region:
+            zones = [zone for zone in zones if zone.region.endswith(region)]
+
+        return list(zones)
