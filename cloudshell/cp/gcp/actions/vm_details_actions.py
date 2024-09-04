@@ -1,5 +1,6 @@
 import re
 import typing
+from logging import Logger
 
 from attr import define
 from cloudshell.cp.core.request_actions.models import (
@@ -10,9 +11,11 @@ from cloudshell.cp.core.request_actions.models import (
 if typing.TYPE_CHECKING:
     from cloudshell.cp.gcp.resource_conf import GCPResourceConfig
 
+
 @define
 class VMDetailsActions:
     config: GCPResourceConfig
+    logger: Logger
 
     @staticmethod
     def _parse_image_name(resource_id):
@@ -46,9 +49,9 @@ class VMDetailsActions:
     def _prepare_common_vm_instance_data(virtual_machine, resource_group_name: str):
         """Prepare common VM instance data."""
         os_disk = virtual_machine.storage_profile.os_disk
-        os_disk_type = convert_azure_to_cs_disk_type(
-            azure_disk_type=os_disk.managed_disk.storage_account_type
-        )
+        # os_disk_type = convert_azure_to_cs_disk_type(
+        #     azure_disk_type=os_disk.managed_disk.storage_account_type
+        # )
         if isinstance(virtual_machine.storage_profile.os_disk.os_type, str):
             os_name = virtual_machine.storage_profile.os_disk.os_type
         else:

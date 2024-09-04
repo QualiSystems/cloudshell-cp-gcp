@@ -3,9 +3,6 @@ from __future__ import annotations
 import logging
 from contextlib import suppress
 from functools import cached_property
-from io import BytesIO, StringIO
-
-from google.api_core.exceptions import NotFound
 from google.cloud import storage
 
 from cloudshell.cp.gcp.handlers.base import BaseGCPHandler
