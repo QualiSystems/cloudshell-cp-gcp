@@ -2,11 +2,13 @@ from __future__ import annotations
 
 import logging
 import random
+from contextlib import suppress
 from functools import cached_property
 from typing import TYPE_CHECKING
 
 from attrs import define
 from google.cloud import compute_v1
+from google.cloud.exceptions import NotFound
 
 from cloudshell.cp.gcp.handlers.base import BaseGCPHandler
 from cloudshell.cp.gcp.helpers.errors import AttributeGCPError
@@ -19,8 +21,8 @@ logger = logging.getLogger(__name__)
 
 @define
 class InstanceHandler(BaseGCPHandler):
-    zone: str
-    region: str | None = None
+    region: str
+    zone: str | None = None
 
     @cached_property
     def instance_client(self):
@@ -38,14 +40,17 @@ class InstanceHandler(BaseGCPHandler):
                             zone = random.choice(zones)
                             kwargs.update({"zone": zone.name})
                         else:
-                            raise AttributeGCPError("Zone cannot be empty.")
+                            raise AttributeGCPError("Region cannot be empty.")  # TODO error message
                 operation = func(*args, **kwargs)
                 return operation
             return wrapper
         return decorator
 
+    def prepare_instance(self):
+        pass
+
     @zone_checker()
-    def deploy(self, instance: compute.Instance, *, zone: str | None = None) -> int:
+    def deploy(self, instance: compute.Instance, *, zone: str | None = None) -> str:
         """Create Virtual Machine."""
         operation = self.instance_client.insert(
             project=self.credentials.project_id,
@@ -56,7 +61,7 @@ class InstanceHandler(BaseGCPHandler):
         # Wait for the operation to complete
         self.wait_for_operation(name=operation.name, zone=zone)
 
-        logger.info(f"VM '{instance.name}' created successfully.")
+        logger.info(f"Instance '{instance.name}' created successfully.")
         return instance.name
         # return self.get_vm_by_name(vm_name=instance.name, zone=zone).id
 
@@ -72,13 +77,21 @@ class InstanceHandler(BaseGCPHandler):
             for subnet in subnets
         ]
 
-    @zone_checker()
     def get_vm_by_name(self, instance_name: str, *, zone: str) -> compute.Instance:
         """Get VM instance by its name."""
         logger.info("Getting VM")
-        return self.instance_client.get(
-            project=self.credentials.project_id, zone=zone, instance=instance_name
-        )
+
+        if zone:
+            return self.instance_client.get(
+                project=self.credentials.project_id, zone=zone, instance=instance_name
+            )
+        for zone in self.get_zones(region=self.region):
+            with suppress(NotFound):
+                return self.instance_client.get(
+                    project=self.credentials.project_id,
+                    zone=zone.name,
+                    instance=instance_name
+                )
 
     @zone_checker()
     def get_vms_by_tag_value(
@@ -140,7 +153,7 @@ class InstanceHandler(BaseGCPHandler):
         logger.info(f"VM '{vm_name}' stopped successfully.")
 
     @zone_checker()
-    def add_tag(self, vm_name: str, tag: dict[str, str], *, zone: str) -> None:
+    def add_tag(self, vm_name: str, tag: str, *, zone: str) -> None:
         """Add tag to existed Virtual Machine."""
         # Get the existing VM
         vm = self.get_vm_by_name(vm_name, zone)
@@ -588,3 +601,12 @@ class InstanceHandler(BaseGCPHandler):
         self.wait_for_operation(name=operation.name, zone=zone)
 
         logger.info(f"Public static IP removed from VM '{vm_name}'.")
+
+
+"""
+
+create_instance_from_config(deploy_app, region) -> self
+get_instance_by_name(instance_name, region)
+
+
+"""

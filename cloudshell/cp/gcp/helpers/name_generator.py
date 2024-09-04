@@ -62,11 +62,11 @@ class GCPNameGenerator:
     def vm_disk(self, instance_name: str, disk_num: int) -> str:
         """app_name-disk-1"""
         """
-        app_name-disk-boot-0
-        app_name-disk-data-1
-        app_name-disk-data-2
+        instance_name-disk-0
+        instance_name-disk-1
+        instance_name-disk-2
         
-        
+        TODO cleanup!!!
         """
         pass
 
