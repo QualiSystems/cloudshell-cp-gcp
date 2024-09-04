@@ -1,10 +1,15 @@
+from __future__ import annotations
+
 from functools import cached_property
-from typing import List
+from logging import Logger
 
-from cloudshell.cp.gcp.handlers.firewall_policy import FirewallPolicyHandler
+from attr import define
+
 from cloudshell.cp.gcp.handlers.firewall_rule import FirewallRuleHandler
+from cloudshell.cp.gcp.resource_conf import GCPResourceConfig
 
 
+@define
 class FirewallPolicyActions:
     NSG_RULE_NAME_TPL = "allow-sandbox-traffic-to-{subnet_cidr}"
     NSG_DENY_RULE_NAME_TPL = "deny-traffic-from-other-sandboxes"
@@ -20,39 +25,14 @@ class FirewallPolicyActions:
     NSG_ADD_MGMT_RULE_NAME_TPL = "allow-{mgmt_network}-to-{sandbox_cidr}"
     NSG_DENY_OTHER_SB_RULE_PRIORITY = 4090
 
-    def __init__(
-        self,
-        resource_config,
-        firewall_policy_name,
-        reservation_info,
-        logger,
-    ):
-        """Init command.
-
-        :param resource_config:
-        :param reservation_info:
-        :param cancellation_manager:
-        :param logger:
-        """
-        self.logger = logger
-        self.config = resource_config
-        self.firewall_policy_name = firewall_policy_name
-        self._reservation_info = reservation_info
-        self._2k_priority = self.NSG_DENY_PRV_RULE_PRIORITY
-        self._4k_priority = self.NSG_ADD_MGMT_RULE_PRIORITY
-        # self._cancellation_manager = cancellation_manager
-        # self._rollback_manager = RollbackCommandsManager(logger=self._logger)
-        # self._tags_manager = AzureTagsManager(
-        #     reservation_info=self._reservation_info, resource_config=resource_config
-        # )
+    logger: Logger
+    config: GCPResourceConfig
+    _lower_priority: int = NSG_DENY_PRV_RULE_PRIORITY
+    _higher_priority: int = NSG_ADD_MGMT_RULE_PRIORITY
 
     @cached_property
     def fr_handler(self):
         return FirewallRuleHandler(self.config.credentials)
-
-    @cached_property
-    def fp_handler(self):
-        return FirewallPolicyHandler(self.config.credentials)
 
     def create_firewall_rules(self, request_actions, network_name):
         """Create all required Firewalls rules.
@@ -101,8 +81,8 @@ class FirewallPolicyActions:
         """
         result = []
         for action in request_actions.prepare_subnets:
-            self._2k_priority += 1
-            self._2k_priority = self.fr_handler.get_or_create_ingress_firewall_rule(
+            self._lower_priority += 1
+            self._lower_priority = self.fr_handler.get_or_create_ingress_firewall_rule(
                 rule_name=self.NSG_RULE_NAME_TPL.format(
                     subnet_cidr=action.get_cidr().replace("/", "--").replace(".", "-")
                 ),
@@ -110,7 +90,7 @@ class FirewallPolicyActions:
                 src_cidr=request_actions.sandbox_cidr,
                 dst_cidr=action.get_cidr(),
                 protocol="all",
-                priority=self._2k_priority,
+                priority=self._lower_priority,
             )
 
         return result
@@ -128,9 +108,9 @@ class FirewallPolicyActions:
         :return:
         """
         for action in request_actions.prepare_private_subnets:
-            self._2k_priority += 1
+            self._lower_priority += 1
             subnet_cidr = action.get_cidr()
-            self._2k_priority = self.fr_handler.get_or_create_ingress_firewall_rule(
+            self._lower_priority = self.fr_handler.get_or_create_ingress_firewall_rule(
                 rule_name=self.NSG_DENY_PRV_RULE_NAME_TPL.format(
                     subnet_cidr=subnet_cidr
                 ).replace("/", "--").replace(".", "-"),
@@ -139,7 +119,7 @@ class FirewallPolicyActions:
                 src_cidr=request_actions.sapndbox_cidr,
                 dst_cidr=subnet_cidr,
                 allowed=False,
-                priority=self._2k_priority,
+                priority=self._lower_priority,
             )
 
     def _create_nsg_additional_mgmt_networks_rules(
@@ -155,8 +135,8 @@ class FirewallPolicyActions:
         :return:
         """
         for mgmt_network in self.config.additional_mgmt_networks:
-            self._4k_priority += 1
-            self._4k_priority = self.fr_handler.get_or_create_ingress_firewall_rule(
+            self._higher_priority += 1
+            self._higher_priority = self.fr_handler.get_or_create_ingress_firewall_rule(
                 rule_name=self.NSG_ADD_MGMT_RULE_NAME_TPL.format(
                     mgmt_network=mgmt_network, sandbox_cidr=request_actions.sandbox_cidr
                 ).replace("/", "--").replace(".", "-"),
@@ -164,7 +144,7 @@ class FirewallPolicyActions:
                 protocol="all",
                 src_cidr=mgmt_network,
                 dst_cidr=request_actions.sandbox_cidr,
-                priority=self._4k_priority
+                priority=self._higher_priority
             )
 
     def _create_nsg_deny_traffic_from_other_sandboxes_rule(

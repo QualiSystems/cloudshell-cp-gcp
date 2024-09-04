@@ -5,15 +5,13 @@ from contextlib import suppress
 from functools import cached_property
 from typing import TYPE_CHECKING
 
-import google
 from attrs import define
 from google.api_core.exceptions import NotFound
 from google.cloud import compute_v1
 
 from cloudshell.cp.gcp.handlers.base import BaseGCPHandler
 
-if TYPE_CHECKING:
-    from google.cloud.compute_v1.types import compute, __all__
+# if TYPE_CHECKING:
 
 logger = logging.getLogger(__name__)
 
