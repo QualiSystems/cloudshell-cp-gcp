@@ -21,7 +21,7 @@ from cloudshell.shell.standards.core.resource_conf.attrs_getter import (
 from cloudshell.shell.standards.core.resource_conf.base_conf import password_decryptor
 from cloudshell.shell.standards.core.resource_conf.resource_attr import AttrMeta
 
-from cloudshell.cp.gcp.helpers.converters import get_credentials
+from cloudshell.cp.gcp.helpers.converters import get_credentials, get_custom_tags
 
 if TYPE_CHECKING:
     from google.auth.credentials import Credentials
@@ -82,16 +82,12 @@ class GCPResourceConfig(BaseConfig):
     credentials: Credentials = attr(
         ATTR_NAMES.json_keys, is_password=True, converter=get_credentials
     )
-    custom_tags_list: list = attr(
+    custom_tags: list = attr(
         ATTR_NAMES.custom_tags,
         default=[],
+        converter=get_custom_tags
     )
     availability_zone: str = attr(ATTR_NAMES.zone)
-
-    def __attrs_post_init__(self):
-        if isinstance(self.context, ResourceRemoteCommandContext):
-            self.reservation_details = self.context.remote_reservation
-        self.reservation_details = self.context.reservation
 
     @cached_property
     def reservation_info(self) -> ReservationInfo:
@@ -101,19 +97,16 @@ class GCPResourceConfig(BaseConfig):
 
     @cached_property
     def tags(self) -> dict:
-        custom_tags = {
-            tag.split("=")[0]: tag.split("=")[1] for tag in self.custom_tags_list
-        }
         default_tags = self._generate_default_tags()
-        return {**default_tags, **custom_tags}
+        return {**default_tags, **self.custom_tags}
 
     def _generate_default_tags(self):
         return {
-            "CreatedBy": "Quali",
-            "Blueprint": self.reservation_details.environment_name,
-            "Owner": self.reservation_details.owner_user,
-            "Domain": self.reservation_details.domain,
-            "ReservationId": self.reservation_details.reservation_id,
+            "Created_By": "Quali",
+            "Blueprint": self.reservation_info.blueprint,
+            "Owner": self.reservation_info.owner,
+            "Domain": self.reservation_info.domain,
+            "Sandbox_Id": self.reservation_info.reservation_id,
         }
 
     @classmethod

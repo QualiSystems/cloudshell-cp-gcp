@@ -1,16 +1,21 @@
 from __future__ import annotations
 
 import json
+import logging
 from contextlib import suppress
 from typing import TYPE_CHECKING
 
+from cloudshell.shell.standards.core.utils import split_list_of_values
 from google.oauth2 import service_account
 from google.auth import default, exceptions
 
+from cloudshell.cp.gcp.helpers.constants import TAG_KEY_PATTERN
 from cloudshell.cp.gcp.helpers.errors import AttributeGCPError
 
 if TYPE_CHECKING:
     from google.auth.credentials import Credentials
+
+logger = logging.getLogger(__name__)
 
 
 def get_credentials(account_info: str) -> Credentials:
@@ -30,3 +35,16 @@ def get_credentials(account_info: str) -> Credentials:
             return service_account.Credentials.from_service_account_file(account_info)
 
     raise AttributeGCPError("Cannot get service account information.")
+
+
+def get_custom_tags(tags: str) -> dict[str: str]:
+    """Get Custom Tags."""
+    custom_tags = {}
+    for tag in split_list_of_values(tags):
+        key, value = tag.split("=")
+        if key and TAG_KEY_PATTERN.match(key):
+            custom_tags[key] = value
+        else:
+            logger.warning(f"Invalid tag key: {key}. "
+                           f"Should match {TAG_KEY_PATTERN.pattern}.")
+    return custom_tags
