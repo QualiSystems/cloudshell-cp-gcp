@@ -1,121 +1,97 @@
 from __future__ import annotations
 
 import re
+from attrs import define
 
-from attrs import define, field
-from typing import TYPE_CHECKING
+from cloudshell.cp.core.utils.name_generator import generate_short_unique_string
+from cloudshell.cp.gcp.helpers.errors import AttributeGCPError
 
-GCP_NAME_PATTERN = r"(?:[a-z](?:[-a-z0-9]{0,61}[a-z0-9])?)"
-pattern_remove_symbols = re.compile(r"[^\w\d\-\.]")
-
-if TYPE_CHECKING:
-    pass
-
-
-def generate_name(name: str) -> str:
-    new_name = name.lower().replace("-", "--")
-    new_name = pattern_remove_symbols.sub("", new_name)
-    return re.sub(r"[^a-z0-9-]", "-", new_name)
-
-
-def generate_vpc_name(name: str) -> str:
-    return f"quali-{generate_name(name)}"
-
-"""
-reservationID = 2b70ac3b-aa35-4dda-b18b-f7d26235139a
-CS_Subnet     = Subnet 10.10.0.0-10.10.10.0
-"""
-DEFAULT_NAME_PREFIX = "quali"
-GOOGLE_NAME_MAX_LENGTH = 62
+GCP_NAME_PREFIX = "quali"
+GCP_NAME_MAX_LENGTH = 62
 
 
 @define
 class GCPNameGenerator:
-    prefix: str = DEFAULT_NAME_PREFIX
-    max_length: int = GOOGLE_NAME_MAX_LENGTH
+    prefix: str = GCP_NAME_PREFIX
+    max_length: int = GCP_NAME_MAX_LENGTH
 
     def __attrs_post_init__(self):
         self.prefix_length = len(self.prefix)
         self.max_core_length = self.max_length - self.prefix_length - 1
+        self.GCP_NAME_PATTERN = rf"^(?:[a-z](?:[-a-z0-9]{{0,{self.max_length}-2}}[a-z0-9]))$"
 
+    def validator(self):
+        def decorator(func):
+            def wrapper(*args, **kwargs):
+                name = func(*args, **kwargs)
+                if not re.match(pattern=self.GCP_NAME_PATTERN, string=name):
+                    raise AttributeGCPError(
+                        f"Name '{name}' doesn't match GCP Name Pattern."
+                    )
+                return name
+            return wrapper
+        return decorator
+
+    @validator()
     def ssh_keys(self) -> str:
         """Hardcoded Name"""
         pass
 
+    @validator()
     def subnet(self, cs_subnet: str) -> str:
         """quali-CS_Subnet"""
-        pass
+        return f"{GCP_NAME_PREFIX}-{re.sub('[ _.]', '-', cs_subnet.lower().replace('-', '--'))}"
 
+    @validator()
     def network(self, reservation_id: str) -> str:
         """quali-reservationID"""
-        pass
+        return f"{GCP_NAME_PREFIX}-{reservation_id}"
 
+    @validator()
     def instance(self, app_name: str, generate: bool = True) -> str:
         """1. verify app_name and set or raise 2. generate vm name based on app_name"""
         if generate:
-            # generate instance name
-            pass
+            postfix = generate_short_unique_string()
+            # remove spaces
+            # CS_ALLOWED_SYMBOLS = re.escape(".-|_[]")
+            instance_name = f"{re.sub('[ _.]', '-', app_name.lower().replace('-', '--'))[:self.max_length-len(postfix)-1]}-{postfix}"
         else:
-            # verify app name only
-            pass
+            instance_name = app_name
 
-    def vm_disk(self, instance_name: str, disk_num: int) -> str:
-        """app_name-disk-1"""
-        """
-        instance_name-disk-0
-        instance_name-disk-1
-        instance_name-disk-2
-        
-        TODO cleanup!!!
-        """
-        pass
+        return instance_name
 
-    def snapshot(self) -> str:
-        """"""
-        pass
+    @validator()
+    def instance_disk(self, instance_name: str, disk_num: int) -> str:
+        """instance_name-disk-1"""
+        return f"{instance_name}-disk-{disk_num}"
 
+    @validator()
+    def iface(self, instance_name: str, iface_num: int) -> str:
+        """instance_name-disk-1"""
+        return f"{instance_name}-iface-{iface_num}"
+
+    @validator()
     def firewall_rule(
-            self,
-            instance_name: str,
-            dst: str,
-            dst_port: int,
-            protocol: str
+        self,
+        instance_name: str,
+        dst: str,
+        dst_port: int,
+        protocol: str
     ) -> str:
-        """quali-vm_name-dst-dst_port-protocol"""
-        pass
+        """quali-instance_name-dst-dst_port-protocol"""
+        return f"{GCP_NAME_PREFIX}-{instance_name}-{dst.replace('/', '--').replace('.', '-')}-{dst_port}-{protocol.lower()}"
 
+    @validator()
     def firewall_policy(self, instance_name: str) -> str:
-        """quali-vm_name"""
-        pass
+        """quali-instance_name"""
+        return f"{GCP_NAME_PREFIX}-{instance_name}"
 
+    @validator()
     def public_ip(self, instance_name: str) -> str:
-        """quali-vm_name-public-ip"""
-        pass
+        """quali-instance_name-public-ip"""
+        return f"{GCP_NAME_PREFIX}-{instance_name}-public-ip"
 
+    @validator()
     def route(self, reservation_id: str, dst: str) -> str:
         """quali-reservationID-dst"""
-        pass
-
-    def image(self) -> str:
-        """"""
-        pass
-
-
-"""
-
-###########################################
-ssh keys        -> hc-name
-subnet          -> quali-CS_Subnet
-network/vpc     -> quali-reservationID
-app-appname     -> 1. verify app_name and set or raise 2. generate vm name based on app_name
-vm disk         -> app_name+disk+disk_num
-snapshots       -> take a look on existed implementation
-Security Group Rule / NSG Rule / Firewall Rule   -> quali-vm_name-dst-dst_port-protocol
-Security Group      / NSG      / Firewall Policy -> quali-vm_name
-Public_IP       -> quali-vm_name-public-ip
-
-
-Route -> quali-reservationID-dst
-images gen?
-IAM Role/Policy gen (2+ phase)
-"""
+        return f"{GCP_NAME_PREFIX}-{reservation_id}-{dst}"

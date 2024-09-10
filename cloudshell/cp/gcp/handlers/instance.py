@@ -1,71 +1,38 @@
 from __future__ import annotations
 
 import logging
-import random
-from contextlib import suppress
 from functools import cached_property
 from typing import TYPE_CHECKING
 
 from attrs import define
 from google.cloud import compute_v1
-from google.cloud.exceptions import NotFound
 
 from cloudshell.cp.gcp.handlers.base import BaseGCPHandler
+from cloudshell.cp.gcp.helpers.name_generator import GCPNameGenerator
 from cloudshell.cp.gcp.helpers.errors import AttributeGCPError
+from cloudshell.cp.gcp.models.deploy_app import (
+    InstanceFromScratchDeployApp,
+    InstanceFromTemplateDeployApp,
+    InstanceFromMachineImageDeployApp,
+)
 
 if TYPE_CHECKING:
+    from google.auth.credentials import Credentials
+    from typing_extensions import Self
     from google.cloud.compute_v1.types import compute
+    from cloudshell.cp.gcp.resource_conf import GCPResourceConfig
 
 logger = logging.getLogger(__name__)
 
 
 @define
-class InstanceHandler(BaseGCPHandler):
-    region: str
-    zone: str | None = None
+class Instance(compute.Instance):
+    deploy_app: [InstanceFromScratchDeployApp, InstanceFromTemplateDeployApp, InstanceFromMachineImageDeployApp]
+    resource_config: GCPResourceConfig
 
-    @cached_property
-    def instance_client(self):
-        return compute_v1.InstancesClient(credentials=self.credentials)
 
-    def zone_checker(self):
-        def decorator(func):
-            def wrapper(*args, **kwargs):
-                if not kwargs.get("zone"):
-                    if self.zone:
-                        kwargs.update({"zone": self.zone})
-                    else:
-                        if self.region:
-                            zones = self.get_zones(region=self.region)
-                            zone = random.choice(zones)
-                            kwargs.update({"zone": zone.name})
-                        else:
-                            raise AttributeGCPError("Region cannot be empty.")  # TODO error message
-                operation = func(*args, **kwargs)
-                return operation
-            return wrapper
-        return decorator
-
-    def prepare_instance(self):
-        pass
-
-    @zone_checker()
-    def deploy(self, instance: compute.Instance, *, zone: str | None = None) -> str:
-        """Create Virtual Machine."""
-        operation = self.instance_client.insert(
-            project=self.credentials.project_id,
-            zone=zone,
-            instance_resource=instance
-        )
-
-        # Wait for the operation to complete
-        self.wait_for_operation(name=operation.name, zone=zone)
-
-        logger.info(f"Instance '{instance.name}' created successfully.")
-        return instance.name
-        # return self.get_vm_by_name(vm_name=instance.name, zone=zone).id
-
-    def _prepare_subnets_attachments(
+    """
+        def _prepare_subnets_attachments(
             self,
             subnets: list[compute.Subnetwork]
     ) -> list[dict[str:str]]:
@@ -76,83 +43,336 @@ class InstanceHandler(BaseGCPHandler):
             }
             for subnet in subnets
         ]
+    """
 
-    def get_vm_by_name(self, instance_name: str, *, zone: str) -> compute.Instance:
-        """Get VM instance by its name."""
-        logger.info("Getting VM")
+    @property
+    def zone_name(self):
+        """Determine short zone.
 
-        if zone:
-            return self.instance_client.get(
-                project=self.credentials.project_id, zone=zone, instance=instance_name
+        Zone value depends on provided zone, region and/or machine type.
+        """
+        if not self.deploy_app.zone:
+            region_client = compute_v1.RegionsClient()
+            region_info = region_client.get(
+                project=self.resource_config.credentials.project_id,
+                region=self.resource_config.region
             )
-        for zone in self.get_zones(region=self.region):
-            with suppress(NotFound):
-                return self.instance_client.get(
-                    project=self.credentials.project_id,
-                    zone=zone.name,
-                    instance=instance_name
-                )
 
-    @zone_checker()
-    def get_vms_by_tag_value(
-        self,
-        tag: str,
-        tag_value: str,
-        *,
-        zone: str
-    ) -> list[compute.Instance]:
-        """Get Virtual Machine instances by tag."""
-        logger.info("Getting VMs by tag")
-        vms = self.instance_client.list(project=self.credentials.project_id, zone=zone)
+            zones = [zone.split('/')[-1] for zone in region_info.zones]
+        else:
+            zones = [self.deploy_app.zone]
 
-        # Filter VMs by tag value
-        return [vm for vm in vms if tag_value in vm.tags.get(tag)]
+        machine_type_client = compute_v1.MachineTypesClient()
 
-    @zone_checker()
-    def get_vm_by_id(self, vm_id: str, *, zone: str) -> compute.Instance:
-        """Get Virtual Machine instance by its ID."""
-        logger.info("Getting VM by VM ID")
-        return self.instance_client.get(
-            project=self.credentials.project_id, zone=zone, instance=vm_id
+        # List all machine types in the specified zone
+        for zone in zones:
+            machine_types = machine_type_client.list(
+                project=self.resource_config.credentials.project_id,
+                zone=zone
+            )
+            for machine_type in machine_types:
+                if self.deploy_app.machine_type == machine_type.name:
+                    return zone
+        
+        raise AttributeGCPError("Incompatible zone and machine type values.")
+
+    def from_scratch(self):
+        """Build GCP Instance from scratch."""
+        # Define the VM settings
+        instance = compute_v1.Instance()
+        instance.name = GCPNameGenerator().instance(
+            app_name=self.deploy_app.app_name,
+            generate=self.deploy_app.autogenerated_name
+        )
+        instance.can_ip_forward = self.deploy_app.ip_forwarding
+        instance.machine_type = f"zones/{self.zone_name}/machineTypes/{self.deploy_app.machine_type}"
+
+        # instance.tags = ["str", "str"]
+
+        scheduling = compute_v1.Scheduling()
+        scheduling.automatic_restart = self.deploy_app.auto_restart
+        scheduling.on_host_maintenance = self.deploy_app.maintenance
+        instance.scheduling = scheduling
+
+        # Create boot disk
+        boot_disk = compute_v1.AttachedDisk()
+        boot_disk.boot = True
+        boot_disk.disk_name = GCPNameGenerator().instance_disk(
+            instance_name=instance.name,
+            disk_num=0
+        )
+        # boot_disk.auto_delete = self.deploy_app.disk_rule
+        disk_initialize_params = compute_v1.AttachedDiskInitializeParams()
+        disk_initialize_params.disk_size_gb = self.deploy_app.disk_size
+        disk_initialize_params.disk_type = f"zones/{self.zone_name}/diskTypes/{self.deploy_app.disk_type}"
+        disk_initialize_params.source_image = f"projects/{self.deploy_app.project_cloud}/global/images/family/{self.deploy_app.disk_image}"
+        boot_disk.initialize_params = disk_initialize_params
+        instance.disks = [boot_disk]
+
+        # # Create Network Interfaces
+        # for subnet_num, subnet in enumerate(subnets):
+        #     network_interface = compute_v1.NetworkInterface()
+        #     network_interface.name = GCPNameGenerator().iface(
+        #         instance_name=instance.name,
+        #         iface_num=subnet_num
+        #     )
+        #     # network_interface.network = ""
+        #     network_interface.subnetwork = f"projects/{self.resource_config.credentials.project_id}/regions/{subnet.region}/subnetworks/{subnet.name}"
+        #     instance.network_interfaces.append(network_interface)
+
+        # Create Metadata (CS Tags)
+        custom_tags = compute_v1.Metadata()
+        items = []
+        for tag in self.deploy_app.custom_tags.items():
+            item = compute_v1.Items()
+            item.key, item.value = tag
+            items.append(item)
+        custom_tags.items = items
+        instance.metadata = custom_tags
+
+        return instance
+
+    def from_template(self):
+        """"""
+
+        template_client = compute_v1.InstanceTemplatesClient()
+
+        # Get the instance template
+        instance_template = template_client.get(
+            project=self.resource_config.project_id,
+            instance_template=self.deploy_app.template_name
         )
 
-    @zone_checker()
-    def delete(self, vm_name: str, *, zone: str) -> None:
+        # Prepare instance configuration based on the template
+        instance = compute_v1.Instance()
+        instance.name = GCPNameGenerator().instance(
+            app_name=self.deploy_app.app_name,
+            generate=self.deploy_app.autogenerated_name
+        )
+
+        instance.can_ip_forward = self.deploy_app.ip_forwarding or instance_template.properties.can_ip_forward
+        instance.machine_type = f"zones/{self.zone_name}/machineTypes/{self.deploy_app.machine_type}" or instance_template.properties.machine_type
+
+        # instance.tags = ["str", "str"]
+
+        scheduling = compute_v1.Scheduling()
+        scheduling.automatic_restart = self.deploy_app.auto_restart or instance_template.properties.scheduling.automatic_restart
+        scheduling.on_host_maintenance = self.deploy_app.maintenance or instance_template.properties.scheduling.on_host_maintenance
+        instance.scheduling = scheduling
+
+        # Create disks
+        for disk in instance_template.properties.disks:
+            attached_disk = compute_v1.AttachedDisk()
+            if disk.boot:
+                attached_disk.auto_delete = disk.auto_delete
+                attached_disk.boot = disk.boot
+
+                disk_initialize_params = compute_v1.AttachedDiskInitializeParams()
+                disk_initialize_params.disk_size_gb = self.deploy_app.disk_size or disk.initialize_params.disk_size_gb
+                if self.deploy_app.disk_type:
+                    disk_initialize_params.disk_type = f"zones/{self.zone_name}/diskTypes/{self.deploy_app.disk_type}"
+                else:
+                    disk_initialize_params.disk_type = disk.initialize_params.disk_type
+
+                if self.deploy_app.disk_image:
+                    disk_initialize_params.source_image = f"projects/{self.deploy_app.project_cloud}/global/images/family/{self.deploy_app.disk_image}"
+                else:
+                    disk_initialize_params.source_image = disk.initialize_params.source_image
+
+                attached_disk.initialize_params = disk_initialize_params
+            else:
+                attached_disk.auto_delete = disk.auto_delete
+                attached_disk.boot = disk.boot
+                attached_disk.type_ = disk.type_
+                attached_disk.initialize_params = disk.initialize_params
+
+            instance.disks.append(attached_disk)
+
+        # # Create Network Interfaces
+        # # instance.network_interfaces = instance_template.properties.network_interfaces
+        # for subnet_num, subnet in enumerate(subnets):
+        #     network_interface = compute_v1.NetworkInterface()
+        #     network_interface.name = GCPNameGenerator().iface(
+        #         instance_name=instance.name,
+        #         iface_num=subnet_num
+        #     )
+        #     # network_interface.network = ""
+        #     network_interface.subnetwork = f"projects/{self.resource_config.credentials.project_id}/regions/{subnet.region}/subnetworks/{subnet.name}"
+        #     instance.network_interfaces.append(network_interface)
+
+        # Create Metadata (CS Tags)
+        custom_tags = compute_v1.Metadata()
+        items = []
+        for tag in self.deploy_app.custom_tags.items():
+            item = compute_v1.Items()
+            item.key, item.value = tag
+            items.append(item)
+        custom_tags.items = items
+        instance.metadata = custom_tags
+
+        return instance
+
+    def from_machine_image(self): # machine_image.source_instance_properties
+        """"""
+        machine_image_client = compute_v1.MachineImagesClient()
+
+        # Get the machine image
+        machine_image = machine_image_client.get(
+            project=self.resource_config.project_id,
+            machine_image=self.deploy_app.machine_image_name
+        )
+
+        # Prepare the instance configuration
+        # Prepare instance configuration based on the template
+        instance = compute_v1.Instance()
+        instance.name = GCPNameGenerator().instance(
+            app_name=self.deploy_app.app_name,
+            generate=self.deploy_app.autogenerated_name
+        )
+
+        instance.can_ip_forward = self.deploy_app.ip_forwarding or machine_image.source_instance_properties.can_ip_forward
+        instance.machine_type = f"zones/{self.zone_name}/machineTypes/{self.deploy_app.machine_type}" or machine_image.source_instance_properties.properties.machine_type
+
+        # instance.tags = ["str", "str"]
+
+        scheduling = compute_v1.Scheduling()
+        scheduling.automatic_restart = self.deploy_app.auto_restart or machine_image.source_instance_properties.scheduling.automatic_restart
+        scheduling.on_host_maintenance = self.deploy_app.maintenance or machine_image.source_instance_properties.scheduling.on_host_maintenance
+        instance.scheduling = scheduling
+
+        # Create disks
+        for disk in machine_image.source_instance_properties.disks:
+            attached_disk = compute_v1.AttachedDisk()
+            attached_disk.auto_delete = disk.auto_delete
+            attached_disk.boot = disk.boot
+            attached_disk.type_ = disk.type_
+            attached_disk.initialize_params = disk.initialize_params
+            instance.disks.append(attached_disk)
+
+        # # Create Network Interfaces
+        # # instance.network_interfaces = machine_image.source_instance_properties.network_interfaces
+        # for subnet_num, subnet in enumerate(subnets):
+        #     network_interface = compute_v1.NetworkInterface()
+        #     network_interface.name = GCPNameGenerator().iface(
+        #         instance_name=instance.name,
+        #         iface_num=subnet_num
+        #     )
+        #     # network_interface.network = ""
+        #     network_interface.subnetwork = f"projects/{self.resource_config.credentials.project_id}/regions/{subnet.region}/subnetworks/{subnet.name}"
+        #     instance.network_interfaces.append(network_interface)
+
+        # Create Metadata (CS Tags)
+        custom_tags = compute_v1.Metadata()
+        items = []
+        for tag in self.deploy_app.custom_tags.items():
+            item = compute_v1.Items()
+            item.key, item.value = tag
+            items.append(item)
+        custom_tags.items = items
+        instance.metadata = custom_tags
+
+        return instance
+
+
+@define
+class InstanceHandler(BaseGCPHandler):
+    instance: Instance
+
+    @cached_property
+    def instance_client(self):
+        return compute_v1.InstancesClient(credentials=self.credentials)
+
+    @classmethod
+    def deploy(cls, instance: Instance, credentials: Credentials) -> Self:
+        """Get instance object from GCP and create InstanceHandler object."""
+        logger.info("Start deploying Instance.")
+        client = compute_v1.InstancesClient(credentials=credentials)
+
+        operation = client.insert(
+            project=credentials.project_id,
+            zone=instance.zone_name,
+            instance_resource=instance
+        )
+
+        # Wait for the operation to complete
+        BaseGCPHandler(credentials=credentials).wait_for_operation(
+            name=operation.name,
+            zone=instance.zone_name
+        )
+        logger.info(f"Instance '{instance.name}' created successfully.")
+
+        instance = client.get(
+            project=credentials.project_id,
+            zone=instance.zone_name,
+            instance=instance.name
+        )
+        return cls(instance=instance, credentials=credentials)
+
+    @classmethod
+    def get(cls, instance_name: str, zone: str, credentials: Credentials) -> Self:
+        """Get instance object from GCP and create InstanceHandler object."""
+        logger.info("Getting Instance.")
+        client = compute_v1.InstancesClient(credentials=credentials)
+        instance = client.get(
+            project=credentials.project_id,
+            zone=zone,
+            instance=instance_name
+        )
+        return cls(instance=instance, credentials=credentials)
+
+    # def zone_checker(self):
+    #     def decorator(func):
+    #         def wrapper(*args, **kwargs):
+    #             if not kwargs.get("zone"):
+    #                 if self.zone:
+    #                     kwargs.update({"zone": self.zone})
+    #                 else:
+    #                     if self.region:
+    #                         zones = self.get_zones(region=self.region)
+    #                         zone = random.choice(zones)
+    #                         kwargs.update({"zone": zone.name})
+    #                     else:
+    #                         raise AttributeGCPError("Region cannot be empty.")  # TODO error message
+    #             operation = func(*args, **kwargs)
+    #             return operation
+    #         return wrapper
+    #     return decorator
+
+    def delete(self, instance_name: str, *, zone: str) -> None:
         """Delete Virtual Machine instance."""
         operation = self.instance_client.delete(
-            project=self.credentials.project_id, zone=zone, instance=vm_name
+            project=self.credentials.project_id,
+            zone=zone,
+            instance=instance_name
         )
 
         # Wait for the operation to complete
         self.wait_for_operation(name=operation.name, zone=zone)
 
-        logger.info(f"VM '{vm_name}' deleted successfully.")
+        logger.info(f"Instance '{instance_name}' deleted successfully.")
 
-    @zone_checker()
-    def start(self, vm_name: str, *, zone: str) -> None:
+    def start(self, instance_name: str, *, zone: str) -> None:
         """Power On Virtual Machine."""
         operation = self.instance_client.start(
-            project=self.credentials.project_id, zone=zone, instance=vm_name
+            project=self.credentials.project_id, zone=zone, instance=instance_name
         )
 
         # Wait for the operation to complete
         self.wait_for_operation(name=operation.name, zone=zone)
 
-        logger.info(f"VM '{vm_name}' started successfully.")
+        logger.info(f"VM '{instance_name}' started successfully.")
 
-    @zone_checker()
-    def stop(self, vm_name: str, *, zone: str) -> None:
+    def stop(self, instance_name: str, *, zone: str) -> None:
         """Power Off Virtual Machine."""
         operation = self.instance_client.stop(
-            project=self.credentials.project_id, zone=zone, instance=vm_name
+            project=self.credentials.project_id, zone=zone, instance=instance_name
         )
 
         # Wait for the operation to complete
         self.wait_for_operation(name=operation.name, zone=zone)
 
-        logger.info(f"VM '{vm_name}' stopped successfully.")
+        logger.info(f"VM '{instance_name}' stopped successfully.")
 
-    @zone_checker()
     def add_tag(self, vm_name: str, tag: str, *, zone: str) -> None:
         """Add tag to existed Virtual Machine."""
         # Get the existing VM
@@ -174,7 +394,6 @@ class InstanceHandler(BaseGCPHandler):
 
         logger.info(f"Tag '{tag}' added to VM '{vm_name}'.")
 
-    @zone_checker()
     def remove_tag(self, vm_name: str, tag: str, *, zone: str) -> None:
         """Remove tag."""
         # Get the existing VM
@@ -196,7 +415,6 @@ class InstanceHandler(BaseGCPHandler):
 
         logger.info(f"Tag '{tag}' removed from VM '{vm_name}'.")
 
-    @zone_checker()
     def add_metadata(self, vm_name: str, key: str, value: str, *, zone: str) -> None:
         """Add metadata record."""
         # Get the existing VM
@@ -218,7 +436,6 @@ class InstanceHandler(BaseGCPHandler):
 
         logger.info(f"Metadata '{key}={value}' added to VM '{vm_name}'.")
 
-    @zone_checker()
     def remove_metadata(self, vm_name: str, key: str, *, zone: str) -> None:
         """Remove metadata record."""
         # Get the existing VM
@@ -242,7 +459,6 @@ class InstanceHandler(BaseGCPHandler):
 
         logger.info(f"Metadata '{key}' removed from VM '{vm_name}'.")
 
-    @zone_checker()
     def add_network_interface(
             self,
             vm_name: str,
@@ -276,7 +492,6 @@ class InstanceHandler(BaseGCPHandler):
 
         logger.info(f"Network interface added to VM '{vm_name}'.")
 
-    @zone_checker()
     def remove_network_interface(
         self, vm_name: str, network_name: str, subnet_name: str, *, zone: str
     ) -> None:
@@ -307,7 +522,6 @@ class InstanceHandler(BaseGCPHandler):
 
         logger.info(f"Network interface removed from VM '{vm_name}'.")
 
-    @zone_checker()
     def add_disk(
             self,
             vm_name: str,
@@ -345,7 +559,6 @@ class InstanceHandler(BaseGCPHandler):
 
         logger.info(f"Disk '{disk_name}' added to VM '{vm_name}'.")
 
-    @zone_checker()
     def remove_disk(self, vm_name: str, disk_name: str, *, zone: str) -> None:
         """Remove disk from Virtual Machine."""
         # Get the existing VM
@@ -369,7 +582,6 @@ class InstanceHandler(BaseGCPHandler):
 
         logger.info(f"Disk '{disk_name}' removed from VM '{vm_name}'.")
 
-    @zone_checker()
     def add_access_config(
         self, vm_name: str, network_name: str, external_ip: str, *, zone: str
     ) -> None:
@@ -400,7 +612,6 @@ class InstanceHandler(BaseGCPHandler):
 
         logger.info(f"Access config added to VM '{vm_name}'.")
 
-    @zone_checker()
     def remove_access_config(self, vm_name: str, external_ip: str, *, zone: str) -> None:
         """Remove Access List Configuration."""
         # Get the existing VM
@@ -424,7 +635,6 @@ class InstanceHandler(BaseGCPHandler):
 
         logger.info(f"Access config removed from VM '{vm_name}'.")
 
-    @zone_checker()
     def add_firewall_rule(
         self, vm_name: str, security_group_name: str, *, zone: str
     ) -> None:
@@ -448,7 +658,6 @@ class InstanceHandler(BaseGCPHandler):
 
         logger.info(f"Firewall rule added to VM '{vm_name}'.")
 
-    @zone_checker()
     def remove_firewall_rule(
         self, vm_name: str, security_group_name: str, *, zone: str
     ) -> None:
@@ -472,7 +681,6 @@ class InstanceHandler(BaseGCPHandler):
 
         logger.info(f"Firewall rule removed from VM '{vm_name}'.")
 
-    @zone_checker()
     def add_service_account(
         self, vm_name: str, service_account_email: str, *, zone: str
     ) -> None:
@@ -501,7 +709,6 @@ class InstanceHandler(BaseGCPHandler):
 
         logger.info(f"Service account added to VM '{vm_name}'.")
 
-    @zone_checker()
     def remove_service_account(
         self, vm_name: str, service_account_email: str, *, zone: str
     ) -> None:
@@ -527,7 +734,6 @@ class InstanceHandler(BaseGCPHandler):
 
         logger.info(f"Service account removed from VM '{vm_name}'.")
 
-    @zone_checker()
     def add_public_key(self, vm_name: str, key: str, *, zone: str) -> None:
         """Add Public Key."""
         # Get the existing VM
@@ -549,7 +755,6 @@ class InstanceHandler(BaseGCPHandler):
 
         logger.info(f"Public key added to VM '{vm_name}'.")
 
-    @zone_checker()
     def add_public_static_ip(self, vm_name: str, ip: str, *, zone: str) -> None:
         """Add Public Static IP."""
         # Get the existing VM
@@ -578,7 +783,6 @@ class InstanceHandler(BaseGCPHandler):
 
         logger.info(f"Public static IP added to VM '{vm_name}'.")
 
-    @zone_checker()
     def remove_public_static_ip(self, vm_name: str, ip: str, *, zone: str) -> None:
         """Remove Public Static IP."""
         # Get the existing VM
@@ -604,9 +808,88 @@ class InstanceHandler(BaseGCPHandler):
 
 
 """
+class Instance(compute.Instance):
 
-create_instance_from_config(deploy_app, region) -> self
-get_instance_by_name(instance_name, region)
+    def _get_zone(self) -> us-central1-a not long URL
+    
+    @classmethod
+    get_instance(cls, name, res_config.credentials) -> self == compute.Instance
+    
+    @classmethod
+    def deploy(cls, deploy_app, res_config, list[network tags]) -> self == compute.Instance
+    def deploy(cls, deploy_app, res_config.region, res_config.credentials, res_config.machine_type) -> self == compute.Instance
+        
+    
+    def delete(self):
+        operation = self.instance_client.delete(
+            project=self.credentials.project_id, zone=self.zone, instance=self.name
+        )
+
+        # Wait for the operation to complete
+        self.wait_for_operation(name=operation.name, zone=zone)
+
+        logger.info(f"VM '{vm_name}' deleted successfully.")
+    
+    def start(self)
+    
+    def stop(self)
+
+
+
+machine type
+
+zone - none
+region exist
+
+get_all_zones in region
+for zone in zones
+    check machine type in zone
+
+
+
+
+Instance ->
+get_zone
+
+deploy app
+    zone
+    machine_type    - zone
+resource
+    region
+
+
+    from_scratch 
+    from_template -> compute.Instance
+    from_machine_image
+
+
+InstanceHandler(BaseGCPHandler):
+instance: compute.Instance
+
+
+    @classmethod
+    deploy()
+    
+
+    @classmethod
+    def get_instance_from_gcp(name)
+
+
+    stop()
+    if not self.instance.id:
+        raise
+
+    start()
+
+
+instance obj -> push GCP Server -> get instance 
+
+
+
+
+
+
+
 
 
 """
