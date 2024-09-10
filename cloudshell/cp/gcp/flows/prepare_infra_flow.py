@@ -13,8 +13,7 @@ from cloudshell.cp.gcp.actions.firewall_policy_actions import FirewallPolicyActi
 from cloudshell.cp.gcp.handlers.ssh_keys import SSHKeysHandler
 from cloudshell.cp.gcp.handlers.subnet import SubnetHandler
 from cloudshell.cp.gcp.handlers.vpc import VPCHandler
-from cloudshell.cp.gcp.helpers.name_generator import generate_name, generate_vpc_name
-
+from cloudshell.cp.gcp.helpers.name_generator import GCPNameGenerator
 
 if TYPE_CHECKING:
     from logging import Logger
@@ -29,6 +28,7 @@ class PrepareGCPInfraFlow(AbstractPrepareSandboxInfraFlow):
     logger: Logger
     config: GCPResourceConfig
     vpc: str = field(init=False, default=None)
+    name_generator: GCPNameGenerator = field(init=False, default=GCPNameGenerator())
 
     def __attrs_post_init__(self):
         super().__init__(self.logger)
@@ -37,7 +37,8 @@ class PrepareGCPInfraFlow(AbstractPrepareSandboxInfraFlow):
         """"""
         vpc_handler = VPCHandler(self.config.credentials)
         self.vpc = vpc_handler.get_or_create_vpc(
-            generate_vpc_name(self.config.reservation_info.reservation_id)
+            self.name_generator.network(
+                self.config.reservation_info.reservation_id)
         )
         self._create_firewall_rules(request_actions, self.vpc)
 
@@ -55,7 +56,9 @@ class PrepareGCPInfraFlow(AbstractPrepareSandboxInfraFlow):
                     subnet_request.actionId: subnet_handler.get_or_create_subnet(
                         network_name=self.vpc,
                         ip_cidr_range=subnet_request.get_cidr(),
-                        subnet_name=generate_name(subnet_request.get_alias())
+                        subnet_name=self.name_generator.subnet(
+                            subnet_request.get_alias()
+                        ),
                     )
                 }
             )

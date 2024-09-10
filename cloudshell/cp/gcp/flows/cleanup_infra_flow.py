@@ -13,9 +13,9 @@ from cloudshell.cp.gcp.handlers.firewall_rule import FirewallRuleHandler
 from cloudshell.cp.gcp.handlers.ssh_keys import SSHKeysHandler
 from cloudshell.cp.gcp.handlers.subnet import SubnetHandler
 from cloudshell.cp.gcp.handlers.vpc import VPCHandler
-from cloudshell.cp.gcp.helpers.name_generator import generate_vpc_name
-
 from cloudshell.cp.core.request_actions import CleanupSandboxInfraRequestActions
+
+from cloudshell.cp.gcp.helpers.name_generator import GCPNameGenerator
 
 if TYPE_CHECKING:
     from logging import Logger
@@ -37,7 +37,7 @@ class CleanUpGCPInfraFlow(AbstractCleanupSandboxInfraFlow):
     def _cleanup_network(self, cleanup_network_action: CleanupNetwork):
         sandbox_id = self.config.reservation_info.reservation_id
         storage_handler = SSHKeysHandler(self.config.credentials)
-        network_name = generate_vpc_name(sandbox_id)
+        network_name = GCPNameGenerator().network(sandbox_id)
         self._logger.info(f"Cleaning up network: quali{network_name} in region:"
                           f" {self.config.region}")
 

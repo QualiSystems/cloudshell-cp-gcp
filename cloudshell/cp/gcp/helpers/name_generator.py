@@ -17,7 +17,7 @@ class GCPNameGenerator:
     max_length: int = GCP_NAME_MAX_LENGTH
     prefix_length: int = field(init=False)
     max_core_length: int = field(init=False)
-    GCP_NAME_PATTERN: str = field(init=False)
+    GCP_NAME_PATTERN: int = field(init=False, default=r"")
 
     def __attrs_post_init__(self):
         self.prefix_length = len(self.prefix)

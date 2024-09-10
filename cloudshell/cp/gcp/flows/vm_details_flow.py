@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 from typing import TYPE_CHECKING
 
 from attr import define
@@ -19,22 +20,26 @@ class GCPGetVMDetailsFlow(AbstractVMDetailsFlow):
     logger: Logger
     config: GCPResourceConfig
 
+    def __attrs_post_init__(self):
+        super().__init__(self.logger)
+
     def _get_vm_details(self, deployed_app: BaseGCPDeployApp):
         """Get VM Details.
 
         :param deployed_app:
         :return:
         """
-        # sandbox_id = self.config.reservation_info.reservation_id
+        name, zone = json.loads(deployed_app.vmdetails.uid).values()
 
-        vm_actions = InstanceHandler()
+        instance_handler = InstanceHandler.get(
+            instance_name=name,
+            credentials=self.config.credentials,
+            zone=zone,
+        )
         vm_details_actions = VMDetailsActions(
-            config=self.config, logger=self._logger
+            config=self.config, logger=self.logger
         )
 
-        # with self._cancellation_manager:
-        vm = vm_actions.get_vm_by_name(
-            vm_name=deployed_app.name,
+        return vm_details_actions.prepare_vm_details(
+            instance_handler=instance_handler
         )
-
-        return vm_details_actions.prepare_custom_vm_details(instance=vm)

@@ -6,6 +6,7 @@ from typing import TYPE_CHECKING
 
 from attrs import define
 from google.cloud import compute_v1
+from google.cloud.compute_v1.types import compute
 
 from cloudshell.cp.gcp.handlers.base import BaseGCPHandler
 from cloudshell.cp.gcp.helpers.name_generator import GCPNameGenerator
@@ -19,7 +20,6 @@ from cloudshell.cp.gcp.models.deploy_app import (
 if TYPE_CHECKING:
     from google.auth.credentials import Credentials
     from typing_extensions import Self
-    from google.cloud.compute_v1.types import compute
     from cloudshell.cp.gcp.resource_conf import GCPResourceConfig
 
 logger = logging.getLogger(__name__)

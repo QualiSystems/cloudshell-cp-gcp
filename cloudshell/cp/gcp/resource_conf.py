@@ -82,9 +82,9 @@ class GCPResourceConfig(BaseConfig):
     credentials: Credentials = attr(
         ATTR_NAMES.json_keys, is_password=True, converter=get_credentials
     )
-    custom_tags: list = attr(
+    custom_tags: dict = attr(
         ATTR_NAMES.custom_tags,
-        default=[],
+        default="",
         converter=get_custom_tags
     )
     availability_zone: str = attr(ATTR_NAMES.zone)
