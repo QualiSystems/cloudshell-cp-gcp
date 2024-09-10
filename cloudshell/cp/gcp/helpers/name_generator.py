@@ -1,11 +1,12 @@
 from __future__ import annotations
 
 import re
-from attrs import define
+from attrs import define, field
 
 from cloudshell.cp.core.utils.name_generator import generate_short_unique_string
 from cloudshell.cp.gcp.helpers.errors import AttributeGCPError
 
+CS_ALLOWED_SYMBOLS = " -.|_[]"
 GCP_NAME_PREFIX = "quali"
 GCP_NAME_MAX_LENGTH = 62
 
@@ -14,63 +15,62 @@ GCP_NAME_MAX_LENGTH = 62
 class GCPNameGenerator:
     prefix: str = GCP_NAME_PREFIX
     max_length: int = GCP_NAME_MAX_LENGTH
+    prefix_length: int = field(init=False)
+    max_core_length: int = field(init=False)
+    GCP_NAME_PATTERN: str = field(init=False)
 
     def __attrs_post_init__(self):
         self.prefix_length = len(self.prefix)
         self.max_core_length = self.max_length - self.prefix_length - 1
-        self.GCP_NAME_PATTERN = rf"^(?:[a-z](?:[-a-z0-9]{{0,{self.max_length}-2}}[a-z0-9]))$"
+        self.GCP_NAME_PATTERN = rf"^(?:[a-z](?:[-a-z0-9]{{0,{self.max_length-1}}}[a-z0-9]))$"
 
-    def validator(self):
-        def decorator(func):
-            def wrapper(*args, **kwargs):
-                name = func(*args, **kwargs)
-                if not re.match(pattern=self.GCP_NAME_PATTERN, string=name):
-                    raise AttributeGCPError(
-                        f"Name '{name}' doesn't match GCP Name Pattern."
-                    )
-                return name
-            return wrapper
-        return decorator
+    def validator(func):
+        def wrapper(self, *args, **kwargs):
+            name = func(self, *args, **kwargs)
+            if not re.match(pattern=self.GCP_NAME_PATTERN, string=name):
+                raise AttributeGCPError(
+                    f"Name '{name}' doesn't match GCP Name Pattern."
+                )
+            return name
+        return wrapper
 
-    @validator()
+    @validator
     def ssh_keys(self) -> str:
         """Hardcoded Name"""
         pass
 
-    @validator()
+    @validator
     def subnet(self, cs_subnet: str) -> str:
         """quali-CS_Subnet"""
         return f"{GCP_NAME_PREFIX}-{re.sub('[ _.]', '-', cs_subnet.lower().replace('-', '--'))}"
 
-    @validator()
+    @validator
     def network(self, reservation_id: str) -> str:
         """quali-reservationID"""
         return f"{GCP_NAME_PREFIX}-{reservation_id}"
 
-    @validator()
+    @validator
     def instance(self, app_name: str, generate: bool = True) -> str:
         """1. verify app_name and set or raise 2. generate vm name based on app_name"""
         if generate:
             postfix = generate_short_unique_string()
-            # remove spaces
-            # CS_ALLOWED_SYMBOLS = re.escape(".-|_[]")
-            instance_name = f"{re.sub('[ _.]', '-', app_name.lower().replace('-', '--'))[:self.max_length-len(postfix)-1]}-{postfix}"
+            instance_name = re.sub(f"[{re.escape(CS_ALLOWED_SYMBOLS)}]+", '-', f"{app_name.lower()[:self.max_length-len(postfix)-1]}-{postfix}")
         else:
             instance_name = app_name
 
         return instance_name
 
-    @validator()
+    @validator
     def instance_disk(self, instance_name: str, disk_num: int) -> str:
         """instance_name-disk-1"""
         return f"{instance_name}-disk-{disk_num}"
 
-    @validator()
+    @validator
     def iface(self, instance_name: str, iface_num: int) -> str:
         """instance_name-disk-1"""
         return f"{instance_name}-iface-{iface_num}"
 
-    @validator()
+    @validator
     def firewall_rule(
         self,
         instance_name: str,
@@ -81,17 +81,17 @@ class GCPNameGenerator:
         """quali-instance_name-dst-dst_port-protocol"""
         return f"{GCP_NAME_PREFIX}-{instance_name}-{dst.replace('/', '--').replace('.', '-')}-{dst_port}-{protocol.lower()}"
 
-    @validator()
+    @validator
     def firewall_policy(self, instance_name: str) -> str:
         """quali-instance_name"""
         return f"{GCP_NAME_PREFIX}-{instance_name}"
 
-    @validator()
+    @validator
     def public_ip(self, instance_name: str) -> str:
         """quali-instance_name-public-ip"""
         return f"{GCP_NAME_PREFIX}-{instance_name}-public-ip"
 
-    @validator()
+    @validator
     def route(self, reservation_id: str, dst: str) -> str:
         """quali-reservationID-dst"""
         return f"{GCP_NAME_PREFIX}-{reservation_id}-{dst}"
