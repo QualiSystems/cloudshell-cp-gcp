@@ -14,6 +14,7 @@ from cloudshell.cp.gcp.helpers.interface_helper import InterfaceHelper
 
 if typing.TYPE_CHECKING:
     from cloudshell.cp.gcp.resource_conf import GCPResourceConfig
+    from cloudshell.cp.gcp.handlers.instance import Instance
 
 
 @define
@@ -35,24 +36,10 @@ class VMDetailsActions:
         return match_images.group("image_name") if match_images else ""
 
     @staticmethod
-    def _parse_resource_group_name(resource_id):
-        """Get resource group name from the Azure resource ID.
-
-        :param str resource_id: Azure resource ID
-        :return: Azure resource group name
-        :rtype: str
-        """
-        match_groups = re.match(
-            r".*resourcegroups/(?P<group_name>[^/]*)/.*",
-            resource_id,
-            flags=re.IGNORECASE,
-        )
-        return match_groups.group("group_name") if match_groups else ""
-
-    @staticmethod
     def _prepare_common_vm_instance_data(instance, resource_group_name: str):
         """Prepare common VM instance data."""
-        os_disk = instance.storage_profile.os_disk
+        disks = instance.disks
+        os_disk = instance.disks[0]
         # os_disk_type = convert_azure_to_cs_disk_type(
         #     azure_disk_type=os_disk.managed_disk.storage_account_type
         # )
@@ -63,17 +50,17 @@ class VMDetailsActions:
 
         vm_properties = [
             VmDetailsProperty(
-                key="VM Size", value=instance.hardware_profile.vm_size
+                key="VM Size", value=instance.machine_type
             ),
             VmDetailsProperty(
                 key="Operating System",
                 value=os_name,
             ),
-            VmDetailsProperty(
-                key="OS Disk Size",
-                value=f"{instance.storage_profile.os_disk.disk_size_gb}GB "
-                f"({os_disk_type})",
-            ),
+            # VmDetailsProperty(
+            #     key="OS Disk Size",
+            #     value=f"{instance.storage_profile.os_disk.disk_size_gb}GB "
+            #     f"({os_disk_type})",
+            # ),
             VmDetailsProperty(
                 key="Resource Group",
                 value=resource_group_name,
@@ -81,27 +68,34 @@ class VMDetailsActions:
         ]
 
         for disk_number, data_disk in enumerate(
-            instance.storage_profile.data_disks, start=1
+            instance.disks, start=1
         ):
-            disk_type = convert_azure_to_cs_disk_type(
-                azure_disk_type=data_disk.managed_disk.storage_account_type
-            )
-            disk_name_prop = VmDetailsProperty(
-                key=f"Data Disk {disk_number} Name",
-                value=get_display_data_disk_name(
-                    vm_name=instance.name, full_disk_name=data_disk.name
-                ),
-            )
-            disk_size_prop = VmDetailsProperty(
-                key=f"Data Disk {disk_number} Size",
-                value=f"{data_disk.disk_size_gb}GB ({disk_type})",
-            )
-            vm_properties.append(disk_name_prop)
-            vm_properties.append(disk_size_prop)
+            if data_disk.boot:
+                vm_properties.append(VmDetailsProperty(
+                key="OS Disk Size",
+                value=f"{instance.storage_profile.os_disk.disk_size_gb}GB "
+                f"({instance.storage_profile.os_disk.disk_type})",))
+
+            # else:
+                # disk_type = convert_azure_to_cs_disk_type(
+                #     azure_disk_type=data_disk.managed_disk.storage_account_type
+                # )
+                # disk_name_prop = VmDetailsProperty(
+                #     key=f"Data Disk {disk_number} Name",
+                #     value=get_display_data_disk_name(
+                #         vm_name=instance.name, full_disk_name=data_disk.name
+                #     ),
+                # )
+                # disk_size_prop = VmDetailsProperty(
+                #     key=f"Data Disk {disk_number} Size",
+                #     value=f"{data_disk.disk_size_gb}GB ({disk_type})",
+                # )
+                # vm_properties.append(disk_name_prop)
+                # vm_properties.append(disk_size_prop)
 
         return vm_properties
 
-    def _prepare_vm_network_data(self, instance):
+    def _prepare_vm_network_data(self, instance: Instance):
         """Prepare VM Network data.
 
         :param instance:
@@ -109,50 +103,42 @@ class VMDetailsActions:
         :return:
         """
         vm_network_interfaces = []
-        public_ip = InterfaceHelper(instance).get_public_ip()
+
 
         for network_interface in instance.network_interfaces:
-            interface_name = get_name_from_resource_id(network_interface.id)
-            interface = self.get_vm_network(
-                interface_name=interface_name, resource_group_name=resource_group_name
-            )
+            is_primary = False
+            index = instance.network_interfaces.index(network_interface)
+            if index == 0:
+                is_primary = True
+            interface_name = network_interface.name
 
-            ip_configuration = interface.ip_configurations[0]
-            private_ip_addr = ip_configuration.private_ip_address
-
+            private_ip = network_interface.network_i_p
+            # nic_type
+            public_ip = InterfaceHelper(instance).get_public_ip(index)
             network_data = [
-                VmDetailsProperty(key="IP", value=ip_configuration.private_ip_address),
-                VmDetailsProperty(key="MAC Address", value=interface.mac_address),
+                # VmDetailsProperty(key="IP", value=private_ip),
             ]
 
-            subnet_name = ip_configuration.subnet.id.split("/")[-1]
+            subnet_name = network_interface.subnetwork
 
-            if ip_configuration.public_ip_address:
-                public_ip = self.get_vm_network_public_ip(
-                    interface_name=interface_name,
-                    resource_group_name=resource_group_name,
-                )
+            if public_ip:
                 network_data.extend(
                     [
-                        VmDetailsProperty(key="Public IP", value=public_ip.ip_address),
                         VmDetailsProperty(
-                            key="Public IP Type",
-                            value=public_ip.public_ip_allocation_method,
+                            key="Public IP Kind",
+                            value=network_interface.access_configs[0].kind,
                         ),
+                        VmDetailsProperty(key='Name', value=interface_name)
                     ]
                 )
 
-                public_ip_addr = public_ip.ip_address
-            else:
-                public_ip_addr = ""
-
             vm_network_interface = VmDetailsNetworkInterface(
-                interfaceId=interface.resource_guid,
-                networkId=subnet_name,
-                isPrimary=interface.primary,
+                interfaceId=index,
+                networkId=subnet_name.split('/')[-1],
+                isPrimary=is_primary,
                 networkData=network_data,
-                privateIpAddress=private_ip_addr,
-                publicIpAddress=public_ip_addr,
+                privateIpAddress=private_ip,
+                publicIpAddress=public_ip,
             )
 
             vm_network_interfaces.append(vm_network_interface)
@@ -193,7 +179,7 @@ class VMDetailsActions:
 
         return [
             VmDetailsProperty(key="Image", value=image_name),
-            VmDetailsProperty(key="Image Resource Group", value=image_resource_group),
+            VmDetailsProperty(key="Image Project", value=image_resource_group),
         ] + self._prepare_common_vm_instance_data(
             instance=instance,
             resource_group_name=resource_group_name,
