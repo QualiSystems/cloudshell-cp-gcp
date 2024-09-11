@@ -3,75 +3,95 @@ from __future__ import annotations
 import logging
 from contextlib import suppress
 from functools import cached_property
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Self
 
+from attr import define
 from google.api_core.exceptions import NotFound
 from google.cloud import compute_v1
 
 from cloudshell.cp.gcp.handlers.base import BaseGCPHandler
+from cloudshell.cp.gcp.helpers.name_generator import GCPNameGenerator
 
 if TYPE_CHECKING:
     from google.cloud.compute_v1.types import compute
 
 logger = logging.getLogger(__name__)
 
-
+@define
 class VPCHandler(BaseGCPHandler):
+    network: compute.Network
+
     @cached_property
     def network_client(self):
         return compute_v1.NetworksClient(credentials=self.credentials)
 
-    def get_vpc_by_name(self, network_name: str) -> compute.Network:
+    @classmethod
+    def get_vpc_by_name(cls, network_name: str, credentials: compute.Credentials) -> Self:
         """Get VPC instance by its name."""
         logger.info("Getting VPC")
-        return self.network_client.get(
-            project=self.credentials.project_id, network=network_name
+        network_client = compute_v1.NetworksClient(credentials=credentials)
+        network = network_client.get(
+            project=credentials.project_id, network=network_name
+        )
+        return cls(
+            credentials=credentials,
+            network=network
         )
 
-    def get_vpc_by_sandbox_id(self, sandbox_id: str) -> compute.Network:
-        """Get VPC instance by tag Sandbox ID."""
+    @classmethod
+    def get_vpc_by_sandbox_id(
+            cls,
+            sandbox_id: str,
+            credentials: compute.Credentials
+    ) -> Self:
+        """Get VPC instance by Sandbox ID."""
         logger.info("Getting VPC")
-        tag_name = "sandbox_id"
-        networks = self.network_client.list(project=self.credentials.project_id)
+        network_name = GCPNameGenerator().network(sandbox_id)
+        network = cls.get_vpc_by_name(network_name, credentials)
+        return network
 
-        # Filter networks by label
-        for network in networks:
-            if network.labels and network.labels.get(tag_name) == sandbox_id:
-                return network
-
-    def get_or_create_vpc(self, sandbox_id: str) -> str:
+    @classmethod
+    def get_or_create_vpc(self, sandbox_id: str, credentials: compute.Credentials) -> Self:
         """Get VPC by Sandbox ID or create a new one."""
         with suppress(NotFound):
-            vpc = self.get_vpc_by_name(sandbox_id)
+            vpc = self.get_vpc_by_sandbox_id(sandbox_id, credentials)
             if vpc:
-                logger.info(f"VPC network '{vpc.name}' already exists.")
-                return vpc.name
-        return self.create(sandbox_id)
+                return vpc
+        return self.create(sandbox_id, credentials)
 
-    def create(self, network_name: str) -> str:
+    @classmethod
+    def create(cls, network_name: str, credentials: compute.Credentials) -> Self:
         """Create VPC."""
+        network_client = compute_v1.NetworksClient(credentials=credentials)
         # Define the VPC network settings
         network = compute_v1.Network()
         network.name = network_name
         network.auto_create_subnetworks = False  # We will create custom subnets
 
         # Create the VPC network
-        operation = self.network_client.insert(
-            project=self.credentials.project_id, network_resource=network
+        operation = network_client.insert(
+            project=credentials.project_id, network_resource=network
         )
 
         # Wait for the operation to complete
-        self.wait_for_operation(name=operation.name)
+        operation_client = compute_v1.GlobalOperationsClient(
+            credentials=credentials
+        )
+
+        operation_client.wait(operation=operation.name)
 
         logger.info(f"VPC network '{network.name}' created successfully.")
-        return network.name
+        return cls(credentials, network)
 
-    def delete(self, network_name: str) -> None:
+    def delete(self) -> None:
         operation = self.network_client.delete(
-            project=self.credentials.project_id, network=network_name
+            project=self.credentials.project_id, network=self.network.name
         )
 
         # Wait for the operation to complete
         self.wait_for_operation(name=operation.name)
 
-        logger.info(f"VPC network '{network_name}' deleted successfully.")
+        logger.info(f"VPC network '{self.network.name}' deleted successfully.")
+
+    def get_subnets(self):
+        return self.network.subnetworks

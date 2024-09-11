@@ -7,6 +7,8 @@ from typing import TYPE_CHECKING
 from cloudshell.cp.core.flows import AbstractDeployFlow
 from cloudshell.cp.core.request_actions import DeployVMRequestActions
 from cloudshell.cp.core.rollback import RollbackCommandsManager
+
+from cloudshell.cp.gcp.handlers.vpc import VPCHandler
 from cloudshell.cp.gcp.helpers.name_generator import GCPNameGenerator
 from cloudshell.cp.gcp.actions.vm_details_actions import VMDetailsActions
 from cloudshell.cp.gcp.flows.deploy_instance.commands import DeployInstanceCommand
@@ -30,7 +32,7 @@ class AbstractGCPDeployFlow(AbstractDeployFlow):
     instance_handler: InstanceHandler
     resource_config: GCPResourceConfig
     cs_api: CloudShellAPISession
-    reservation_info: ReservationInfo
+    # reservation_info: ReservationInfo
     cancellation_manager: CancellationContextManager
 
     def __attrs_post_init__(self):
@@ -78,17 +80,25 @@ class AbstractGCPDeployFlow(AbstractDeployFlow):
         )
 
     @abstractmethod
-    def _create_instance(self, deploy_app: BaseGCPDeployApp) -> Instance:
+    def _create_instance(self, deploy_app: BaseGCPDeployApp, subnet_list: list[str]) \
+            -> Instance:
         """"""
         pass
 
     def _deploy(self, request_actions: DeployVMRequestActions) -> DeployAppResult:
         """Deploy Proxmox Instance."""
         # noinspection PyTypeChecker
+
         deploy_app: BaseGCPDeployApp = request_actions.deploy_app
+        subnet_list = [x.subnet_id for x in request_actions.connect_subnets]
+        if not subnet_list:
+            subnet_list = []
 
         with self.cancellation_manager:
-            instance = self._create_instance(deploy_app=deploy_app)
+            instance = self._create_instance(
+                deploy_app=deploy_app,
+                subnet_list=subnet_list
+            )
 
         with self._rollback_manager:
             logger.info(f"Creating Instance {instance.name}")
@@ -104,3 +114,11 @@ class AbstractGCPDeployFlow(AbstractDeployFlow):
             deploy_app=deploy_app,
             instance_name=deployed_instance.name,
         )
+
+    def _get_network(self) -> VPCHandler:
+        """
+        Get Network.
+        """
+
+        network_handler = VPCHandler.get_vpc_by_sandbox_id(self.resource_config.reservation_info.reservation_id)
+        return network_handler.get_vpc_by_name(network_name)

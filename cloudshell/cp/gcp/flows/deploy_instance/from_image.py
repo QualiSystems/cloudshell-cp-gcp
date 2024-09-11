@@ -13,9 +13,11 @@ class GCPDeployInstanceFromImageFlow(AbstractGCPDeployFlow):
     def _create_instance(
         self,
         deploy_app: InstanceFromMachineImageDeployApp,
+        subnet_list: list[str],
     ) -> Instance:
         """Create Instance object based on Machine Image."""
         return Instance(
             deploy_app=deploy_app,
-            resource_config=self.resource_config
+            resource_config=self.resource_config,
+            subnet_list=subnet_list,
         ).from_machine_image()

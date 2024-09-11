@@ -29,6 +29,7 @@ logger = logging.getLogger(__name__)
 class Instance(compute.Instance):
     deploy_app: [InstanceFromScratchDeployApp, InstanceFromTemplateDeployApp, InstanceFromMachineImageDeployApp]
     resource_config: GCPResourceConfig
+    subnet_list: list[str]
 
 
     """
@@ -68,7 +69,7 @@ class Instance(compute.Instance):
         for zone in zones:
             machine_types = machine_type_client.list(
                 project=self.resource_config.credentials.project_id,
-                zone=zone
+                zone=self._zone
             )
             for machine_type in machine_types:
                 if self.deploy_app.machine_type == machine_type.name:
@@ -320,6 +321,10 @@ class InstanceHandler(BaseGCPHandler):
         )
         return cls(instance=instance, credentials=credentials)
 
+    @property
+    def _zone(self):
+        return self.instance.zone.rsplit('/', 1)[-1]
+
     # def zone_checker(self):
     #     def decorator(func):
     #         def wrapper(*args, **kwargs):
@@ -338,38 +343,38 @@ class InstanceHandler(BaseGCPHandler):
     #         return wrapper
     #     return decorator
 
-    def delete(self, instance_name: str, *, zone: str) -> None:
+    def delete(self) -> None:
         """Delete Virtual Machine instance."""
         operation = self.instance_client.delete(
             project=self.credentials.project_id,
-            zone=zone,
-            instance=instance_name
+            zone=self._zone,
+            instance=self.instance.name
         )
 
         # Wait for the operation to complete
-        self.wait_for_operation(name=operation.name, zone=zone)
+        self.wait_for_operation(name=operation.name, zone=self._zone)
 
-        logger.info(f"Instance '{instance_name}' deleted successfully.")
+        logger.info(f"Instance '{self.instance.name}' deleted successfully.")
 
     def start(self, instance_name: str, *, zone: str) -> None:
         """Power On Virtual Machine."""
         operation = self.instance_client.start(
-            project=self.credentials.project_id, zone=zone, instance=instance_name
+            project=self.credentials.project_id, zone=self._zone, instance=self.instance.name
         )
 
         # Wait for the operation to complete
-        self.wait_for_operation(name=operation.name, zone=zone)
+        self.wait_for_operation(name=operation.name, zone=self._zone)
 
         logger.info(f"VM '{instance_name}' started successfully.")
 
     def stop(self, instance_name: str, *, zone: str) -> None:
         """Power Off Virtual Machine."""
         operation = self.instance_client.stop(
-            project=self.credentials.project_id, zone=zone, instance=instance_name
+            project=self.credentials.project_id, zone=self._zone, instance=self.instance.name
         )
 
         # Wait for the operation to complete
-        self.wait_for_operation(name=operation.name, zone=zone)
+        self.wait_for_operation(name=operation.name, zone=self._zone)
 
         logger.info(f"VM '{instance_name}' stopped successfully.")
 
@@ -384,15 +389,15 @@ class InstanceHandler(BaseGCPHandler):
         # Update the VM
         operation = self.instance_client.update(
             project=self.credentials.project_id,
-            zone=zone,
-            instance=vm_name,
+            zone=self._zone,
+            instance=self.instance.name,
             instance_resource=vm,
         )
 
         # Wait for the operation to complete
-        self.wait_for_operation(name=operation.name, zone=zone)
+        self.wait_for_operation(name=operation.name, zone=self._zone)
 
-        logger.info(f"Tag '{tag}' added to VM '{vm_name}'.")
+        logger.info(f"Tag '{tag}' added to VM '{self.instance.name}'.")
 
     def remove_tag(self, vm_name: str, tag: str, *, zone: str) -> None:
         """Remove tag."""
@@ -405,15 +410,15 @@ class InstanceHandler(BaseGCPHandler):
         # Update the VM
         operation = self.instance_client.update(
             project=self.credentials.project_id,
-            zone=zone,
-            instance=vm_name,
+            zone=self._zone,
+            instance=self.instance.name,
             instance_resource=vm,
         )
 
         # Wait for the operation to complete
-        self.wait_for_operation(name=operation.name, zone=zone)
+        self.wait_for_operation(name=operation.name, zone=self._zone)
 
-        logger.info(f"Tag '{tag}' removed from VM '{vm_name}'.")
+        logger.info(f"Tag '{tag}' removed from VM '{self.instance.name}'.")
 
     def add_metadata(self, vm_name: str, key: str, value: str, *, zone: str) -> None:
         """Add metadata record."""
@@ -426,15 +431,15 @@ class InstanceHandler(BaseGCPHandler):
         # Update the VM
         operation = self.instance_client.update(
             project=self.credentials.project_id,
-            zone=zone,
-            instance=vm_name,
+            zone=self._zone,
+            instance=self.instance.name,
             instance_resource=vm,
         )
 
         # Wait for the operation to complete
-        self.wait_for_operation(name=operation.name, zone=zone)
+        self.wait_for_operation(name=operation.name, zone=self._zone)
 
-        logger.info(f"Metadata '{key}={value}' added to VM '{vm_name}'.")
+        logger.info(f"Metadata '{key}={value}' added to VM '{self.instance.name}'.")
 
     def remove_metadata(self, vm_name: str, key: str, *, zone: str) -> None:
         """Remove metadata record."""
@@ -449,15 +454,15 @@ class InstanceHandler(BaseGCPHandler):
         # Update the VM
         operation = self.instance_client.update(
             project=self.credentials.project_id,
-            zone=zone,
-            instance=vm_name,
+            zone=self._zone,
+            instance=self.instance.name,
             instance_resource=vm,
         )
 
         # Wait for the operation to complete
-        self.wait_for_operation(name=operation.name, zone=zone)
+        self.wait_for_operation(name=operation.name, zone=self._zone)
 
-        logger.info(f"Metadata '{key}' removed from VM '{vm_name}'.")
+        logger.info(f"Metadata '{key}' removed from VM '{self.instance.name}'.")
 
     def add_network_interface(
             self,
@@ -482,15 +487,15 @@ class InstanceHandler(BaseGCPHandler):
         # Update the VM
         operation = self.instance_client.update(
             project=self.credentials.project_id,
-            zone=zone,
-            instance=vm_name,
+            zone=self._zone,
+            instance=self.instance.name,
             instance_resource=vm,
         )
 
         # Wait for the operation to complete
-        self.wait_for_operation(name=operation.name, zone=zone)
+        self.wait_for_operation(name=operation.name, zone=self._zone)
 
-        logger.info(f"Network interface added to VM '{vm_name}'.")
+        logger.info(f"Network interface added to VM '{self.instance.name}'.")
 
     def remove_network_interface(
         self, vm_name: str, network_name: str, subnet_name: str, *, zone: str
@@ -512,15 +517,15 @@ class InstanceHandler(BaseGCPHandler):
         # Update the VM
         operation = self.instance_client.update(
             project=self.credentials.project_id,
-            zone=zone,
-            instance=vm_name,
+            zone=self._zone,
+            instance=self.instance.name,
             instance_resource=vm,
         )
 
         # Wait for the operation to complete
-        self.wait_for_operation(name=operation.name, zone=zone)
+        self.wait_for_operation(name=operation.name, zone=self._zone)
 
-        logger.info(f"Network interface removed from VM '{vm_name}'.")
+        logger.info(f"Network interface removed from VM '{self.instance.name}'.")
 
     def add_disk(
             self,
@@ -549,15 +554,15 @@ class InstanceHandler(BaseGCPHandler):
         # Update the VM
         operation = self.instance_client.update(
             project=self.credentials.project_id,
-            zone=zone,
-            instance=vm_name,
+            zone=self._zone,
+            instance=self.instance.name,
             instance_resource=vm,
         )
 
         # Wait for the operation to complete
-        self.wait_for_operation(name=operation.name, zone=zone)
+        self.wait_for_operation(name=operation.name, zone=self._zone)
 
-        logger.info(f"Disk '{disk_name}' added to VM '{vm_name}'.")
+        logger.info(f"Disk '{disk_name}' added to VM '{self.instance.name}'.")
 
     def remove_disk(self, vm_name: str, disk_name: str, *, zone: str) -> None:
         """Remove disk from Virtual Machine."""
@@ -572,15 +577,15 @@ class InstanceHandler(BaseGCPHandler):
         # Update the VM
         operation = self.instance_client.update(
             project=self.credentials.project_id,
-            zone=zone,
-            instance=vm_name,
+            zone=self._zone,
+            instance=self.instance.name,
             instance_resource=vm,
         )
 
         # Wait for the operation to complete
-        self.wait_for_operation(name=operation.name, zone=zone)
+        self.wait_for_operation(name=operation.name, zone=self._zone)
 
-        logger.info(f"Disk '{disk_name}' removed from VM '{vm_name}'.")
+        logger.info(f"Disk '{disk_name}' removed from VM '{self.instance.name}'.")
 
     def add_access_config(
         self, vm_name: str, network_name: str, external_ip: str, *, zone: str
@@ -602,15 +607,15 @@ class InstanceHandler(BaseGCPHandler):
         # Update the VM
         operation = self.instance_client.update(
             project=self.credentials.project_id,
-            zone=zone,
-            instance=vm_name,
+            zone=self._zone,
+            instance=self.instance.name,
             instance_resource=vm,
         )
 
         # Wait for the operation to complete
-        self.wait_for_operation(name=operation.name, zone=zone)
+        self.wait_for_operation(name=operation.name, zone=self._zone)
 
-        logger.info(f"Access config added to VM '{vm_name}'.")
+        logger.info(f"Access config added to VM '{self.instance.name}'.")
 
     def remove_access_config(self, vm_name: str, external_ip: str, *, zone: str) -> None:
         """Remove Access List Configuration."""
@@ -625,15 +630,15 @@ class InstanceHandler(BaseGCPHandler):
         # Update the VM
         operation = self.instance_client.update(
             project=self.credentials.project_id,
-            zone=zone,
-            instance=vm_name,
+            zone=self._zone,
+            instance=self.instance.name,
             instance_resource=vm,
         )
 
         # Wait for the operation to complete
-        self.wait_for_operation(name=operation.name, zone=zone)
+        self.wait_for_operation(name=operation.name, zone=self._zone)
 
-        logger.info(f"Access config removed from VM '{vm_name}'.")
+        logger.info(f"Access config removed from VM '{self.instance.name}'.")
 
     def add_firewall_rule(
         self, vm_name: str, security_group_name: str, *, zone: str
@@ -648,15 +653,15 @@ class InstanceHandler(BaseGCPHandler):
         # Update the VM
         operation = self.instance_client.update(
             project=self.credentials.project_id,
-            zone=zone,
-            instance=vm_name,
+            zone=self._zone,
+            instance=self.instance.name,
             instance_resource=vm,
         )
 
         # Wait for the operation to complete
-        self.wait_for_operation(name=operation.name, zone=zone)
+        self.wait_for_operation(name=operation.name, zone=self._zone)
 
-        logger.info(f"Firewall rule added to VM '{vm_name}'.")
+        logger.info(f"Firewall rule added to VM '{self.instance.name}'.")
 
     def remove_firewall_rule(
         self, vm_name: str, security_group_name: str, *, zone: str
@@ -671,15 +676,15 @@ class InstanceHandler(BaseGCPHandler):
         # Update the VM
         operation = self.instance_client.update(
             project=self.credentials.project_id,
-            zone=zone,
-            instance=vm_name,
+            zone=self._zone,
+            instance=self.instance.name,
             instance_resource=vm,
         )
 
         # Wait for the operation to complete
-        self.wait_for_operation(name=operation.name, zone=zone)
+        self.wait_for_operation(name=operation.name, zone=self._zone)
 
-        logger.info(f"Firewall rule removed from VM '{vm_name}'.")
+        logger.info(f"Firewall rule removed from VM '{self.instance.name}'.")
 
     def add_service_account(
         self, vm_name: str, service_account_email: str, *, zone: str
@@ -699,15 +704,15 @@ class InstanceHandler(BaseGCPHandler):
         # Update the VM
         operation = self.instance_client.update(
             project=self.credentials.project_id,
-            zone=zone,
-            instance=vm_name,
+            zone=self._zone,
+            instance=self.instance.name,
             instance_resource=vm,
         )
 
         # Wait for the operation to complete
-        self.wait_for_operation(name=operation.name, zone=zone)
+        self.wait_for_operation(name=operation.name, zone=self._zone)
 
-        logger.info(f"Service account added to VM '{vm_name}'.")
+        logger.info(f"Service account added to VM '{self.instance.name}'.")
 
     def remove_service_account(
         self, vm_name: str, service_account_email: str, *, zone: str
@@ -724,15 +729,15 @@ class InstanceHandler(BaseGCPHandler):
         # Update the VM
         operation = self.instance_client.update(
             project=self.credentials.project_id,
-            zone=zone,
-            instance=vm_name,
+            zone=self._zone,
+            instance=self.instance.name,
             instance_resource=vm,
         )
 
         # Wait for the operation to complete
-        self.wait_for_operation(name=operation.name, zone=zone)
+        self.wait_for_operation(name=operation.name, zone=self._zone)
 
-        logger.info(f"Service account removed from VM '{vm_name}'.")
+        logger.info(f"Service account removed from VM '{self.instance.name}'.")
 
     def add_public_key(self, vm_name: str, key: str, *, zone: str) -> None:
         """Add Public Key."""
@@ -745,15 +750,15 @@ class InstanceHandler(BaseGCPHandler):
         # Update the VM
         operation = self.instance_client.update(
             project=self.credentials.project_id,
-            zone=zone,
-            instance=vm_name,
+            zone=self._zone,
+            instance=self.instance.name,
             instance_resource=vm,
         )
 
         # Wait for the operation to complete
-        self.wait_for_operation(name=operation.name, zone=zone)
+        self.wait_for_operation(name=operation.name, zone=self._zone)
 
-        logger.info(f"Public key added to VM '{vm_name}'.")
+        logger.info(f"Public key added to VM '{self.instance.name}'.")
 
     def add_public_static_ip(self, vm_name: str, ip: str, *, zone: str) -> None:
         """Add Public Static IP."""
@@ -773,15 +778,15 @@ class InstanceHandler(BaseGCPHandler):
         # Update the VM
         operation = self.instance_client.update(
             project=self.credentials.project_id,
-            zone=zone,
-            instance=vm_name,
+            zone=self._zone,
+            instance=self.instance.name,
             instance_resource=vm,
         )
 
         # Wait for the operation to complete
-        self.wait_for_operation(name=operation.name, zone=zone)
+        self.wait_for_operation(name=operation.name, zone=self._zone)
 
-        logger.info(f"Public static IP added to VM '{vm_name}'.")
+        logger.info(f"Public static IP added to VM '{self.instance.name}'.")
 
     def remove_public_static_ip(self, vm_name: str, ip: str, *, zone: str) -> None:
         """Remove Public Static IP."""
@@ -796,15 +801,15 @@ class InstanceHandler(BaseGCPHandler):
         # Update the VM
         operation = self.instance_client.update(
             project=self.credentials.project_id,
-            zone=zone,
-            instance=vm_name,
+            zone=self._zone,
+            instance=self.instance.name,
             instance_resource=vm,
         )
 
         # Wait for the operation to complete
-        self.wait_for_operation(name=operation.name, zone=zone)
+        self.wait_for_operation(name=operation.name, zone=self._zone)
 
-        logger.info(f"Public static IP removed from VM '{vm_name}'.")
+        logger.info(f"Public static IP removed from VM '{self.instance.name}'.")
 
 
 """
@@ -826,7 +831,7 @@ class Instance(compute.Instance):
         )
 
         # Wait for the operation to complete
-        self.wait_for_operation(name=operation.name, zone=zone)
+        self.wait_for_operation(name=operation.name, zone=self._zone)
 
         logger.info(f"VM '{vm_name}' deleted successfully.")
     

@@ -125,7 +125,7 @@ class VMDetailsActions:
 
             vm_network_interface = VmDetailsNetworkInterface(
                 interfaceId=index,
-                networkId=subnet_name.split('/')[-1],
+                networkId=subnet_name,
                 isPrimary=is_primary,
                 networkData=network_data,
                 privateIpAddress=private_ip,

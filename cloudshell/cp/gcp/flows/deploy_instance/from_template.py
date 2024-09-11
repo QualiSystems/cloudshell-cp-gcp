@@ -13,9 +13,11 @@ class GCPDeployInstanceFromTemplateFlow(AbstractGCPDeployFlow):
     def _create_instance(
         self,
         deploy_app: InstanceFromTemplateDeployApp,
+        subnet_list: list[str],
     ) -> Instance:
         """Create Instance object based on Template."""
         return Instance(
             deploy_app=deploy_app,
-            resource_config=self.resource_config
+            resource_config=self.resource_config,
+            subnet_list=subnet_list,
         ).from_template()

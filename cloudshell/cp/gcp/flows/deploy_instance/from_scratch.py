@@ -13,9 +13,11 @@ class GCPDeployInstanceFromScratchFlow(AbstractGCPDeployFlow):
     def _create_instance(
         self,
         deploy_app: InstanceFromScratchDeployApp,
+            subnet_list: list[str]
     ) -> Instance:
         """Create Instance object based on provided attributes."""
         return Instance(
             deploy_app=deploy_app,
-            resource_config=self.resource_config
+            resource_config=self.resource_config,
+        subnet_list = subnet_list,
         ).from_scratch()
