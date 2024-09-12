@@ -9,6 +9,7 @@ from cloudshell.cp.core.flows import AbstractDeployFlow
 from cloudshell.cp.core.request_actions import DeployVMRequestActions
 from cloudshell.cp.core.rollback import RollbackCommandsManager
 
+from cloudshell.cp.gcp.helpers.constants import SET_WIN_PASSWORD_SCRIPT_TPL
 from cloudshell.cp.gcp.actions.firewall_policy_actions import FirewallPolicyActions
 from cloudshell.cp.gcp.handlers.ssh_keys import SSHKeysHandler
 from cloudshell.cp.gcp.handlers.vpc import VPCHandler
@@ -123,10 +124,10 @@ class AbstractGCPDeployFlow(AbstractDeployFlow):
         if self._is_windows(deploy_app) and deploy_app.password:
             instance.metadata["sysprep-specialize-script-ps1"] = \
                 (
-                    f'$Password = ConvertTo-SecureString -String '
-                    f'{deploy_app.password} -AsPlainText -Force\n\n'
-                    f'New-LocalUser -name "{user}" -Password $Password\n\n'
-                    f'Add-LocalGroupMember -Group "Administrators" -Member "{user}"'
+                    SET_WIN_PASSWORD_SCRIPT_TPL.format(
+                        password=deploy_app.password,
+                        user=deploy_app.user
+                    )
                 )
 
         with self._rollback_manager:
@@ -140,11 +141,13 @@ class AbstractGCPDeployFlow(AbstractDeployFlow):
 
         logger.info(f"Instance {deployed_instance.name} created")
 
-        firewall_actions = FirewallPolicyActions(credentils=self.config.credentials)
+        firewall_actions = FirewallPolicyActions(
+            credentials=self.resource_config.credentials
+        )
         for tag_name, inbound_port in net_tags.items():
             firewall_actions.create_inbound_port_rule(
                 network_name=network_handler.network.name,
-                instance_name=deployed_instance.name,
+                network_tag=tag_name,
                 inbound_port=inbound_port,
             )
 

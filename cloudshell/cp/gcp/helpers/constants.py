@@ -4,9 +4,15 @@ import re
 
 SHELL_NAME = "Google Cloud Provider Shell 2G"
 
-VM_FROM_SCRATCH_DEPLOYMENT_PATH = f"{SHELL_NAME}.Google Cloud Instance From Scratch"
-VM_FROM_TEMPLATE_DEPLOYMENT_PATH = f"{SHELL_NAME}.Google Cloud Instance From Template"
-VM_FROM_MACHINE_IMAGE_DEPLOYMENT_PATH = f"{SHELL_NAME}.Google Cloud Instance From Machine Image" # noqa E501
+VM_FROM_SCRATCH_DEPLOYMENT_PATH = f"{SHELL_NAME}.GCP Instance From Scratch"
+VM_FROM_TEMPLATE_DEPLOYMENT_PATH = f"{SHELL_NAME}.GCP Instance From Template"
+VM_FROM_MACHINE_IMAGE_DEPLOYMENT_PATH = f"{SHELL_NAME}.GCP Instance From Machine Image" # noqa E501
+
+SET_WIN_PASSWORD_SCRIPT_TPL = (
+    '$Password = ConvertTo-SecureString -String {password} -AsPlainText -Force\n\n'
+    'New-LocalUser -name "{user}" -Password $Password\n\n'
+    'Add-LocalGroupMember -Group "Administrators" -Member "{user}"'
+)
 
 TAG_KEY_PATTERN = re.compile(r"[^a-z0-9-_]")
 

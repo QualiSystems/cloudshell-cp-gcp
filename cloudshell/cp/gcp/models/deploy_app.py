@@ -2,11 +2,9 @@ from __future__ import annotations
 
 from cloudshell.cp.core.request_actions import DeployVMRequestActions
 from cloudshell.cp.core.request_actions.models import DeployApp
-from cloudshell.cp.gcp.helpers.name_generator import GCPNameGenerator
 
 from cloudshell.cp.gcp.helpers import constants
-from cloudshell.cp.gcp.helpers.network_tag_helper import NetworkTagHelper, InboundPort, \
-    parse_port_range
+from cloudshell.cp.gcp.helpers.network_tag_helper import parse_port_range
 from cloudshell.cp.gcp.helpers.password_generator import generate_password
 from cloudshell.cp.gcp.models.attributes import (
     ResourceAttrRODeploymentPath,

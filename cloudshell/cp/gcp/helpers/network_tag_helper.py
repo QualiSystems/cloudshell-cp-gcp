@@ -3,7 +3,6 @@ import re
 from attr import define
 
 from cloudshell.cp.gcp.helpers.name_generator import GCPNameGenerator
-from cloudshell.cp.gcp.models.deploy_app import BaseGCPDeployApp
 
 DEFAULT_DESTINATION = "0.0.0.0/0"
 DEFAULT_PROTOCOL = "tcp"

@@ -8,6 +8,7 @@ from attr import define
 from typing_extensions import TYPE_CHECKING
 
 from cloudshell.cp.gcp.handlers.firewall_rule import FirewallRuleHandler
+from cloudshell.cp.gcp.helpers.network_tag_helper import InboundPort
 from cloudshell.cp.gcp.resource_conf import GCPResourceConfig
 
 if TYPE_CHECKING:
@@ -167,23 +168,20 @@ class FirewallPolicyActions:
     def create_inbound_port_rule(
             self,
             network_name: str,
-            rule_name: str,
             network_tag: str,
-            src_address: str,
-            port_range: list[str],
-            protocol: str = "tcp"
+            inbound_port: InboundPort,
     ):
         """Create inbound port rule.
 
         """
         priority = self.fr_handler.get_higher_priority(network_name=network_name)
         return self.fr_handler.get_or_create_ingress_firewall_rule(
-            rule_name=rule_name,
+            rule_name=network_tag,
             network_name=network_name,
-            src_cidr=src_address,
-            ports=port_range,
+            src_cidr=inbound_port.src_address,
+            ports=[inbound_port.port_range],
             allowed=True,
-            protocol=protocol,
+            protocol=inbound_port.protocol,
             priority=priority,
             network_tag=network_tag,
         )

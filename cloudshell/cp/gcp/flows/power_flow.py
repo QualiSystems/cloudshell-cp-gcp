@@ -1,10 +1,15 @@
 from __future__ import annotations
 
-from attr import define
+import json
 
-from cloudshell.cp.gcp.handlers.instance import InstanceHandler
-from cloudshell.cp.gcp.models.deployed_app import BaseGCPDeployApp
-from cloudshell.cp.gcp.resource_conf import GCPResourceConfig
+from attr import define
+from typing import TYPE_CHECKING
+
+
+if TYPE_CHECKING:
+    from cloudshell.cp.gcp.handlers.instance import InstanceHandler
+    from cloudshell.cp.gcp.models.deployed_app import BaseGCPDeployApp
+    from cloudshell.cp.gcp.resource_conf import GCPResourceConfig
 
 
 @define
@@ -12,11 +17,13 @@ class GCPPowerFlow:
     deployed_app: BaseGCPDeployApp
     resource_config: GCPResourceConfig
 
-    def _get_instance(self, instance_name) -> InstanceHandler:
-        return InstanceHandler.get_vm_by_name(instance_name)
+    def _get_instance(self, instance_uuid) -> InstanceHandler:
+        instance_data = json.loads(instance_uuid)
+        instance_data["credentials"] = self.resource_config.credentials
+        return InstanceHandler.get(**instance_data)
 
     def power_on(self):
-        instance = self._get_instance(self.deployed_app.name)
+        instance = self._get_instance(self.deployed_app.vmdetails.uid)
         if instance.status != "RUNNING":
             instance.start()
 

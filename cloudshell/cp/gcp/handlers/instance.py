@@ -356,7 +356,7 @@ class InstanceHandler(BaseGCPHandler):
 
         logger.info(f"Instance '{self.instance.name}' deleted successfully.")
 
-    def start(self, instance_name: str, *, zone: str) -> None:
+    def start(self) -> None:
         """Power On Virtual Machine."""
         operation = self.instance_client.start(
             project=self.credentials.project_id, zone=self._zone, instance=self.instance.name
@@ -365,9 +365,9 @@ class InstanceHandler(BaseGCPHandler):
         # Wait for the operation to complete
         self.wait_for_operation(name=operation.name, zone=self._zone)
 
-        logger.info(f"VM '{instance_name}' started successfully.")
+        logger.info(f"VM '{self.instance.name}' started successfully.")
 
-    def stop(self, instance_name: str, *, zone: str) -> None:
+    def stop(self) -> None:
         """Power Off Virtual Machine."""
         operation = self.instance_client.stop(
             project=self.credentials.project_id, zone=self._zone, instance=self.instance.name
@@ -378,7 +378,7 @@ class InstanceHandler(BaseGCPHandler):
 
         logger.info(f"VM '{instance_name}' stopped successfully.")
 
-    def add_tag(self, vm_name: str, tag: str, *, zone: str) -> None:
+    def add_tag(self) -> None:
         """Add tag to existed Virtual Machine."""
         # Get the existing VM
         vm = self.get_vm_by_name(vm_name, zone)
