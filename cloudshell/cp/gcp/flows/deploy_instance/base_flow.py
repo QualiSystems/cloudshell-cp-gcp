@@ -133,5 +133,6 @@ class AbstractGCPDeployFlow(AbstractDeployFlow):
         """
 
         return VPCHandler.get_vpc_by_sandbox_id(
-            self.resource_config.reservation_info.reservation_id
+            self.resource_config.reservation_info.reservation_id,
+            self.resource_config.credentials
         )

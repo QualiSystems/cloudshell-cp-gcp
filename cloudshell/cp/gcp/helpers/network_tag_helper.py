@@ -20,7 +20,7 @@ class NetworkTagHelper:
     PORT_DATA_MATCH = re.compile(
         r"^(?P<from_port>\d+)"
         r"(-(?P<to_port>\d+))?"
-        r"(:(?P<protocol>(udp|tcp|icmp)))?"
+        r"(:(?P<protocol>(all|udp|tcp|icmp)))?"
         r"(:(?P<destination>\S+))?$",
         re.IGNORECASE,
     )
