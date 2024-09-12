@@ -94,4 +94,4 @@ class VPCHandler(BaseGCPHandler):
         logger.info(f"VPC network '{self.network.name}' deleted successfully.")
 
     def get_subnets(self):
-        return self.network.subnetworks
+        return list(self.network.subnetworks)

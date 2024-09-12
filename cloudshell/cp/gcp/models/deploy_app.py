@@ -4,6 +4,7 @@ from cloudshell.cp.core.request_actions import DeployVMRequestActions
 from cloudshell.cp.core.request_actions.models import DeployApp
 
 from cloudshell.cp.gcp.helpers import constants
+from cloudshell.cp.gcp.helpers.network_tag_helper import NetworkTagHelper
 from cloudshell.cp.gcp.models.attributes import (
     ResourceAttrRODeploymentPath,
     ResourceBoolAttrRODeploymentPath,
@@ -13,6 +14,21 @@ from cloudshell.cp.gcp.models.attributes import (
     GCPFromTemplateDeploymentAppAttributeNames,
     GCPFromVMImageDeploymentAppAttributeNames,
 )
+
+CUSTOM_NSG_RULE_NAME_TPL = (
+    "rule-{vm_name}-{dst_address}-"
+    "{dst_port_range}-{protocol}"
+)
+
+
+class InboundPortsAttrRO(ResourceAttrRODeploymentPath):
+    def __get__(self, instance, owner):
+        if instance is None:
+            return self
+        helper = NetworkTagHelper()
+
+        attr = instance.attributes.get(self.get_key(instance), self.default)
+        return [port_data.strip() for port_data in attr.split(";") if port_data]
 
 
 class BaseGCPDeployApp(DeployApp):
@@ -25,7 +41,7 @@ class BaseGCPDeployApp(DeployApp):
     maintenance = ResourceAttrRODeploymentPath(ATTR_NAMES.maintenance)
     auto_restart = ResourceBoolAttrRODeploymentPath(ATTR_NAMES.auto_restart)
     ip_forwarding = ResourceBoolAttrRODeploymentPath(ATTR_NAMES.ip_forwarding)
-    inbound_ports = ResourceAttrRODeploymentPath(ATTR_NAMES.inbound_ports)
+    inbound_ports = InboundPortsAttrRO(ATTR_NAMES.inbound_ports)
     custom_tags = ResourceAttrRODeploymentPath(ATTR_NAMES.custom_tags)
     wait_for_ip = ResourceBoolAttrRODeploymentPath(ATTR_NAMES.wait_for_ip)
     add_public_ip = ResourceBoolAttrRODeploymentPath(ATTR_NAMES.add_public_ip)

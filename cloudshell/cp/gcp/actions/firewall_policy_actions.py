@@ -17,10 +17,7 @@ class FirewallPolicyActions:
     NSG_DENY_PRV_RULE_NAME_TPL = "deny_internet_traffic_to_priv_subnet_{subnet_cidr}"
     VM_NSG_NAME_TPL = "rule_{vm_name}"
     INBOUND_RULE_DIRECTION = "inbound"
-    CUSTOM_NSG_RULE_NAME_TPL = (
-        "rule-{vm_name}-{dst_address}-"
-        "{dst_port_range}-{protocol}"
-    )
+
     NSG_ADD_MGMT_RULE_PRIORITY = 4000
     NSG_ADD_MGMT_RULE_NAME_TPL = "allow-{mgmt_network}-to-{sandbox_cidr}"
     NSG_DENY_OTHER_SB_RULE_PRIORITY = 4090

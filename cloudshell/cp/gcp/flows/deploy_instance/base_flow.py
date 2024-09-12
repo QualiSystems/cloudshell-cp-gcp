@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 import logging
 from abc import abstractmethod
 from typing import TYPE_CHECKING
@@ -42,33 +43,35 @@ class AbstractGCPDeployFlow(AbstractDeployFlow):
 
     def _prepare_vm_details_data(
         self,
-        deployed_vm_id: int,
-        deploy_app: BaseGCPDeployApp
+        deployed_vm: InstanceHandler,
     ) -> VmDetailsData:
         """Prepare CloudShell VM Details model."""
         vm_details_actions = VMDetailsActions(
-            self.proxmox_api,
-            self._resource_config,
-            self._cancellation_manager,
+            config=self._resource_config,
+            logger=self._logger,
         )
-        return vm_details_actions.create(deployed_vm_id, deploy_app)
+        return vm_details_actions.prepare_vm_details(deployed_vm)
 
     def _prepare_deploy_app_result(
         self,
         deploy_app: BaseGCPDeployApp,
-        instance_name: str,
+        instance_handler: InstanceHandler,
     ) -> DeployAppResult:
         vm_details_data = self._prepare_vm_details_data(
-            deployed_vm_id=deployed_vm_id,
-            deploy_app=deploy_app,
+            deployed_vm=instance_handler,
         )
 
         logger.info(f"Prepared VM details: {vm_details_data}")
 
         return DeployAppResult(
             actionId=deploy_app.actionId,
-            vmUuid=str(deployed_vm_id),
-            vmName=instance_name,
+            vmUuid=json.dumps(
+                {
+                    "instance_name": instance_handler.instance.name,
+                    "zone": instance_handler.instance.zone
+                }
+            ),
+            vmName=instance_handler.instance.name,
             vmDetailsData=vm_details_data,
             deployedAppAdditionalData={
                 "ip_regex": deploy_app.ip_regex,
@@ -76,7 +79,7 @@ class AbstractGCPDeployFlow(AbstractDeployFlow):
                 "auto_power_off": deploy_app.auto_power_off,
                 "auto_delete": deploy_app.auto_delete,
             },
-            deployedAppAttributes=self._prepare_app_attrs(deploy_app, deployed_vm_id),
+            # deployedAppAttributes=self._prepare_app_attrs(deploy_app, deployed_vm_id),
         )
 
     @abstractmethod
@@ -88,11 +91,11 @@ class AbstractGCPDeployFlow(AbstractDeployFlow):
     def _deploy(self, request_actions: DeployVMRequestActions) -> DeployAppResult:
         """Deploy Proxmox Instance."""
         # noinspection PyTypeChecker
-
+        network_handler = self._get_network()
         deploy_app: BaseGCPDeployApp = request_actions.deploy_app
         subnet_list = [x.subnet_id for x in request_actions.connect_subnets]
         if not subnet_list:
-            subnet_list = []
+            subnet_list = network_handler.get_subnets()
 
         with self.cancellation_manager:
             instance = self._create_instance(
@@ -102,6 +105,8 @@ class AbstractGCPDeployFlow(AbstractDeployFlow):
 
         with self._rollback_manager:
             logger.info(f"Creating Instance {instance.name}")
+            # ToDo DeployInstanceCommand.execute() should return InstanceHandler
+            # ToDo additionally we need to pass deploy_app.network_tags.keys()
             deployed_instance = DeployInstanceCommand(
                 instance=instance,
                 credentials=self.resource_config.credentials,
@@ -109,10 +114,17 @@ class AbstractGCPDeployFlow(AbstractDeployFlow):
                 cancellation_manager=self.cancellation_manager,
             ).execute()
 
+        logger.info(f"Instance {deployed_instance.name} created")
+
+        # ToDo I will add network tags over here.
+        # firewall_actions = FirewallActions(config=self.config, logger=self.logger)
+        # for tag_name, inbound_port in deploy_app.network_tags.items():
+        #     firewall_actions.create_inbound_port_rule(...)
+
         logger.info(f"Preparing Deploy App result for the {deployed_instance.name}")
         return self._prepare_deploy_app_result(
             deploy_app=deploy_app,
-            instance_name=deployed_instance.name,
+            instance_handler=deployed_instance,
         )
 
     def _get_network(self) -> VPCHandler:
@@ -120,5 +132,6 @@ class AbstractGCPDeployFlow(AbstractDeployFlow):
         Get Network.
         """
 
-        network_handler = VPCHandler.get_vpc_by_sandbox_id(self.resource_config.reservation_info.reservation_id)
-        return network_handler.get_vpc_by_name(network_name)
+        return VPCHandler.get_vpc_by_sandbox_id(
+            self.resource_config.reservation_info.reservation_id
+        )
