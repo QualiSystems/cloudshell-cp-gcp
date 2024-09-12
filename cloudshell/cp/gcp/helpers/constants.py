@@ -30,3 +30,5 @@ PUBLIC_IMAGE_PROJECTS = {
     "Ubuntu Pro":                       "ubuntu-os-pro-cloud",
     "Windows Server":                   "windows-cloud",
 }
+
+

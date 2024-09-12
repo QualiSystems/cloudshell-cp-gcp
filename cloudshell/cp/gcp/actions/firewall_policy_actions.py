@@ -1,12 +1,20 @@
 from __future__ import annotations
 
+import logging
 from functools import cached_property
 from logging import Logger
 
 from attr import define
+from typing_extensions import TYPE_CHECKING
 
 from cloudshell.cp.gcp.handlers.firewall_rule import FirewallRuleHandler
 from cloudshell.cp.gcp.resource_conf import GCPResourceConfig
+
+if TYPE_CHECKING:
+    from google.auth.credentials import Credentials
+
+
+logger = logging.getLogger(__name__)
 
 
 @define
@@ -22,16 +30,16 @@ class FirewallPolicyActions:
     NSG_ADD_MGMT_RULE_NAME_TPL = "allow-{mgmt_network}-to-{sandbox_cidr}"
     NSG_DENY_OTHER_SB_RULE_PRIORITY = 4090
 
-    logger: Logger
-    config: GCPResourceConfig
+    credentials: Credentials
     _lower_priority: int = NSG_DENY_PRV_RULE_PRIORITY
     _higher_priority: int = NSG_ADD_MGMT_RULE_PRIORITY
 
     @cached_property
     def fr_handler(self):
-        return FirewallRuleHandler(self.config.credentials)
+        return FirewallRuleHandler(credentials)
 
-    def create_firewall_rules(self, request_actions, network_name):
+    def create_firewall_rules(self, request_actions, network_name,
+                              additional_mgmt_networks=None):
         """Create all required Firewalls rules.
 
         :return:
@@ -47,17 +55,6 @@ class FirewallPolicyActions:
             request_actions=request_actions,
             network_name=network_name,
         )
-
-        # self._create_nsg_additional_mgmt_networks_rules(
-        #     request_actions=request_actions,
-        #     network_name=network_name,
-        # )
-
-        # self._create_nsg_allow_mgmt_vnet_rule(
-        #     request_actions=request_actions,
-        #     nsg_name=nsg_name,
-        #     resource_group_name=resource_group_name,
-        # )
 
         self._create_nsg_deny_traffic_from_other_sandboxes_rule(
             request_actions=request_actions,
@@ -122,7 +119,8 @@ class FirewallPolicyActions:
     def _create_nsg_additional_mgmt_networks_rules(
             self,
             request_actions,
-            network_name
+            network_name,
+            additional_mgmt_networks
     ):
         """Create NSG rules for the additional MGMT networks.
 
@@ -131,7 +129,7 @@ class FirewallPolicyActions:
         :param str resource_group_name:
         :return:
         """
-        for mgmt_network in self.config.additional_mgmt_networks:
+        for mgmt_network in additional_mgmt_networks:
             self._higher_priority += 1
             self._higher_priority = self.fr_handler.get_or_create_ingress_firewall_rule(
                 rule_name=self.NSG_ADD_MGMT_RULE_NAME_TPL.format(
@@ -169,7 +167,7 @@ class FirewallPolicyActions:
     def create_inbound_port_rule(
             self,
             network_name: str,
-            vm_name: str,
+            rule_name: str,
             network_tag: str,
             src_address: str,
             port_range: list[str],
@@ -178,22 +176,10 @@ class FirewallPolicyActions:
         """Create inbound port rule.
 
         """
-        ports_name = "-".join(
-            map(lambda x: str(x).replace("-", "--"), port_range)
-        )
         priority = self.fr_handler.get_higher_priority(network_name=network_name)
         return self.fr_handler.get_or_create_ingress_firewall_rule(
-            rule_name=self.CUSTOM_NSG_RULE_NAME_TPL.format(
-                vm_name=vm_name,
-                dst_address=src_address.replace(
-                    "/", "--"
-                ).replace(
-                    ".", "-"
-                ),
-                dst_port_range=ports_name,
-                protocol=protocol,
-            ),
-            network_name=self.config.network_name,
+            rule_name=rule_name,
+            network_name=network_name,
             src_cidr=src_address,
             ports=port_range,
             allowed=True,
@@ -201,35 +187,3 @@ class FirewallPolicyActions:
             priority=priority,
             network_tag=network_tag,
         )
-
-    # def _create_nsg_allow_mgmt_vnet_rule(
-    #     self, request_actions, nsg_name, resource_group_name, rules_priority_generator
-    # ):
-    #     """Create NSG allow MGMT vNET rule.
-    #
-    #     :param request_actions:
-    #     :param str nsg_name:
-    #     :param str resource_group_name:
-    #     :return:
-    #     """
-    #     nsg_actions = NetworkSecurityGroupActions(
-    #         azure_client=self._azure_client, logger=self._logger
-    #     )
-    #     network_actions = NetworkActions(
-    #         azure_client=self._azure_client, logger=self._logger
-    #     )
-    #
-    #     if network_actions.mgmt_virtual_network_exists(
-    #         self.config.management_group_name
-    #     ):
-    #         commands.CreateAllowMGMTVnetRuleCommand(
-    #             rollback_manager=self._rollback_manager,
-    #             cancellation_manager=self._cancellation_manager,
-    #             mgmt_resource_group_name=self.config.management_group_name,
-    #             resource_group_name=resource_group_name,
-    #             network_actions=network_actions,
-    #             nsg_actions=nsg_actions,
-    #             nsg_name=nsg_name,
-    #             sandbox_cidr=request_actions.sandbox_cidr,
-    #             rules_priority_generator=rules_priority_generator,
-    #         ).execute()

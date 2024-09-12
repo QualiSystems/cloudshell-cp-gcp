@@ -9,11 +9,14 @@ from cloudshell.cp.core.flows import AbstractDeployFlow
 from cloudshell.cp.core.request_actions import DeployVMRequestActions
 from cloudshell.cp.core.rollback import RollbackCommandsManager
 
+from cloudshell.cp.gcp.actions.firewall_policy_actions import FirewallPolicyActions
+from cloudshell.cp.gcp.handlers.ssh_keys import SSHKeysHandler
 from cloudshell.cp.gcp.handlers.vpc import VPCHandler
+from cloudshell.cp.gcp.helpers.interface_helper import InterfaceHelper
 from cloudshell.cp.gcp.helpers.name_generator import GCPNameGenerator
 from cloudshell.cp.gcp.actions.vm_details_actions import VMDetailsActions
 from cloudshell.cp.gcp.flows.deploy_instance.commands import DeployInstanceCommand
-
+from cloudshell.cp.gcp.helpers.network_tag_helper import get_network_tags, InboundPort
 
 if TYPE_CHECKING:
     from cloudshell.cp.gcp.handlers.instance import Instance, InstanceHandler
@@ -56,6 +59,7 @@ class AbstractGCPDeployFlow(AbstractDeployFlow):
         self,
         deploy_app: BaseGCPDeployApp,
         instance_handler: InstanceHandler,
+        password: str = None,
     ) -> DeployAppResult:
         vm_details_data = self._prepare_vm_details_data(
             deployed_vm=instance_handler,
@@ -79,12 +83,21 @@ class AbstractGCPDeployFlow(AbstractDeployFlow):
                 "auto_power_off": deploy_app.auto_power_off,
                 "auto_delete": deploy_app.auto_delete,
             },
-            # deployedAppAttributes=self._prepare_app_attrs(deploy_app, deployed_vm_id),
+            deployedAppAttributes=self._prepare_app_attrs(
+                deploy_app,
+                instance_handler,
+                password
+            ),
         )
 
     @abstractmethod
     def _create_instance(self, deploy_app: BaseGCPDeployApp, subnet_list: list[str]) \
             -> Instance:
+        """"""
+        pass
+
+    @abstractmethod
+    def _is_windows(self, deploy_app: BaseGCPDeployApp) -> bool:
         """"""
         pass
 
@@ -103,10 +116,21 @@ class AbstractGCPDeployFlow(AbstractDeployFlow):
                 subnet_list=subnet_list
             )
 
+        net_tags = self._get_network_tags(instance, deploy_app)
+        if net_tags:
+            instance.tags = net_tags.keys()
+
+        if self._is_windows(deploy_app) and deploy_app.password:
+            instance.metadata["sysprep-specialize-script-ps1"] = \
+                (
+                    f'$Password = ConvertTo-SecureString -String '
+                    f'{deploy_app.password} -AsPlainText -Force\n\n'
+                    f'New-LocalUser -name "{user}" -Password $Password\n\n'
+                    f'Add-LocalGroupMember -Group "Administrators" -Member "{user}"'
+                )
+
         with self._rollback_manager:
             logger.info(f"Creating Instance {instance.name}")
-            # ToDo DeployInstanceCommand.execute() should return InstanceHandler
-            # ToDo additionally we need to pass deploy_app.network_tags.keys()
             deployed_instance = DeployInstanceCommand(
                 instance=instance,
                 credentials=self.resource_config.credentials,
@@ -116,16 +140,35 @@ class AbstractGCPDeployFlow(AbstractDeployFlow):
 
         logger.info(f"Instance {deployed_instance.name} created")
 
-        # ToDo I will add network tags over here.
-        # firewall_actions = FirewallActions(config=self.config, logger=self.logger)
-        # for tag_name, inbound_port in deploy_app.network_tags.items():
-        #     firewall_actions.create_inbound_port_rule(...)
+        firewall_actions = FirewallPolicyActions(credentils=self.config.credentials)
+        for tag_name, inbound_port in net_tags.items():
+            firewall_actions.create_inbound_port_rule(
+                network_name=network_handler.network.name,
+                instance_name=deployed_instance.name,
+                inbound_port=inbound_port,
+            )
 
         logger.info(f"Preparing Deploy App result for the {deployed_instance.name}")
         return self._prepare_deploy_app_result(
             deploy_app=deploy_app,
             instance_handler=deployed_instance,
+            password=deploy_app.password,
         )
+
+    def _prepare_app_attrs(
+            self,
+            deploy_app: BaseGCPDeployApp,
+            instance_handler: InstanceHandler,
+            password: str = None,
+    ) -> list[Attribute]:
+        deployed_app_attrs = [
+            Attribute("User", deploy_app.user),
+            Attribute("Public IP", InterfaceHelper.get_public_ip(instance_handler)),
+        ]
+        if password:
+            deployed_app_attrs.append(Attribute("Password", password))
+
+        return deployed_app_attrs
 
     def _get_network(self) -> VPCHandler:
         """
@@ -136,3 +179,25 @@ class AbstractGCPDeployFlow(AbstractDeployFlow):
             self.resource_config.reservation_info.reservation_id,
             self.resource_config.credentials
         )
+
+    def _get_tags(self, deploy_app: BaseGCPDeployApp) -> dict[str, str]:
+        tags = self.resource_config.custom_tags | deploy_app.custom_tags
+        tags["ssh-keys"] = self._add_ssh_key(deploy_app)
+
+    def _get_network_tags(
+            self,
+            instance: Instance,
+            deploy_app: BaseGCPDeployApp
+    ) -> dict[str, InboundPort]:
+        net_tags = get_network_tags(instance.name,
+                                    deploy_app.inbound_ports)
+        return net_tags
+
+    def _add_ssh_key(self, deploy_app: BaseGCPDeployApp) -> str:
+        ssh_key_handler = SSHKeysHandler(self.resource_config.credentials)
+        key = ssh_key_handler.download_ssh_key(
+            self.resource_config.keypairs_location,
+            file_path=f"{self.resource_config.reservation_info.reservation_id}/public_key"
+        )
+        return f"{deploy_app.user}: {key}"
+

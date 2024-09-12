@@ -74,12 +74,12 @@ class GCPNameGenerator:
     def firewall_rule(
         self,
         instance_name: str,
-        dst: str,
+        src_cidr: str,
         dst_port: int,
         protocol: str
     ) -> str:
         """quali-instance_name-dst-dst_port-protocol"""
-        return f"{GCP_NAME_PREFIX}-{instance_name}-{dst.replace('/', '--').replace('.', '-')}-{dst_port}-{protocol.lower()}"
+        return f"{GCP_NAME_PREFIX}-{instance_name}-{src_cidr.replace('/', '--').replace('.', '-')}-{dst_port}-{protocol.lower()}"
 
     @validator
     def firewall_policy(self, instance_name: str) -> str:

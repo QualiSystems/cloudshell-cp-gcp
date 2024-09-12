@@ -88,11 +88,10 @@ class PrepareGCPInfraFlow(AbstractPrepareSandboxInfraFlow):
         :return:
         """
         fp_actions = FirewallPolicyActions(
-            config=self.config,
+            credentials=self.config.credentials,
             # firewall_policy_name=f"quali-"
             #                      f"{self.config.reservation_info.reservation_id}",
             # reservation_info=self.config.reservation_info,
             # cancellation_manager=None,
-            logger=self.logger,
         )
         fp_actions.create_firewall_rules(request_actions, network_name)
