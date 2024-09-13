@@ -52,21 +52,22 @@ class VPCHandler(BaseGCPHandler):
         return network
 
     @classmethod
-    def get_or_create_vpc(self, sandbox_id: str, credentials: compute.Credentials) -> Self:
+    def get_or_create_vpc(cls, sandbox_id: str, credentials: compute.Credentials) -> (
+            Self):
         """Get VPC by Sandbox ID or create a new one."""
         with suppress(NotFound):
-            vpc = self.get_vpc_by_sandbox_id(sandbox_id, credentials)
+            vpc = cls.get_vpc_by_sandbox_id(sandbox_id, credentials)
             if vpc:
                 return vpc
-        return self.create(sandbox_id, credentials)
+        return cls.create(sandbox_id, credentials)
 
     @classmethod
-    def create(cls, network_name: str, credentials: compute.Credentials) -> Self:
+    def create(cls, sandbox_id: str, credentials: compute.Credentials) -> Self:
         """Create VPC."""
         network_client = compute_v1.NetworksClient(credentials=credentials)
         # Define the VPC network settings
         network = compute_v1.Network()
-        network.name = network_name
+        network.name = GCPNameGenerator().network(sandbox_id)
         network.auto_create_subnetworks = False  # We will create custom subnets
 
         # Create the VPC network

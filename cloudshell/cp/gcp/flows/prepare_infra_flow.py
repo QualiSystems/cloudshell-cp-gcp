@@ -35,11 +35,10 @@ class PrepareGCPInfraFlow(AbstractPrepareSandboxInfraFlow):
 
     def prepare_common_objects(self, request_actions: RequestActions) -> None:
         """"""
-        vpc_handler = VPCHandler(self.config.credentials)
-        self.vpc = vpc_handler.get_or_create_vpc(
-            self.name_generator.network(
-                self.config.reservation_info.reservation_id)
-        )
+        self.vpc = VPCHandler.get_or_create_vpc(
+            self.config.reservation_info.reservation_id,
+            self.config.credentials
+        ).network.name
         self._create_firewall_rules(request_actions, self.vpc)
 
     def prepare_cloud_infra(self, request_actions: RequestActions) -> str:
@@ -51,15 +50,18 @@ class PrepareGCPInfraFlow(AbstractPrepareSandboxInfraFlow):
         subnet_results = {}
         subnet_handler = SubnetHandler(self.config.credentials, self.config.region)
         for subnet_request in request_actions.prepare_subnets:
-            subnet_results.update(
-                {
-                    subnet_request.actionId: subnet_handler.get_or_create_subnet(
+            subnet_id = subnet_handler.get_or_create_subnet(
                         network_name=self.vpc,
                         ip_cidr_range=subnet_request.get_cidr(),
                         subnet_name=self.name_generator.subnet(
                             subnet_request.get_alias()
                         ),
-                    )
+                        region=self.config.region,
+                    ).self_link
+            subnet_id = subnet_id[subnet_id.find("/projects/"):]
+            subnet_results.update(
+                {
+                    subnet_request.actionId: subnet_id
                 }
             )
         return subnet_results

@@ -37,7 +37,7 @@ class FirewallPolicyActions:
 
     @cached_property
     def fr_handler(self):
-        return FirewallRuleHandler(credentials)
+        return FirewallRuleHandler(self.credentials)
 
     def create_firewall_rules(self, request_actions, network_name,
                               additional_mgmt_networks=None):

@@ -2,6 +2,8 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
+from attr import define
+
 from cloudshell.cp.gcp.handlers.instance import Instance, InstanceHandler
 from cloudshell.cp.gcp.flows.deploy_instance.base_flow import AbstractGCPDeployFlow
 

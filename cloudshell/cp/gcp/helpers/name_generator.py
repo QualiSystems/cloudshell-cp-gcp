@@ -42,7 +42,7 @@ class GCPNameGenerator:
     @validator
     def subnet(self, cs_subnet: str) -> str:
         """quali-CS_Subnet"""
-        return f"{GCP_NAME_PREFIX}-{re.sub('[ _.]', '-', cs_subnet.lower().replace('-', '--'))}"
+        return f"{GCP_NAME_PREFIX}-{re.sub(f'[{re.escape(CS_ALLOWED_SYMBOLS)}]+', '-', cs_subnet.lower().replace('-', '--'))}"
 
     @validator
     def network(self, reservation_id: str) -> str:

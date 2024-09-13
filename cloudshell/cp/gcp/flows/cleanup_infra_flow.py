@@ -53,8 +53,11 @@ class CleanUpGCPInfraFlow(AbstractCleanupSandboxInfraFlow):
         self.logger.info(f"Deleting all components of VPC: {network_name}")
 
         # try:
-        network_handler = VPCHandler(self.config.credentials)
-        vpc = network_handler.get_vpc_by_name(network_name)
+        network_handler = VPCHandler.get_vpc_by_sandbox_id(
+            self.config.reservation_info.reservation_id,
+            self.config.credentials
+        )
+        vpc = network_handler.network
 
         # Get subnets
         subnets = {x.split("/")[-1] for x in vpc.subnetworks}
@@ -82,11 +85,13 @@ class CleanUpGCPInfraFlow(AbstractCleanupSandboxInfraFlow):
         #     operation = self.route_client.delete(project=self.credentials.project_id, route=route.name)
         #     self.wait_for_operation(name=operation.name)
 
-        network_handler = VPCHandler(self.config.credentials)
-        network_handler.delete(network_name=network_name)
+        network_handler.delete()
 
         with suppress(NotFound):
-            network_handler.get_vpc_by_name(network_name)
+            VPCHandler.get_vpc_by_sandbox_id(
+                self.config.reservation_info.reservation_id,
+                self.config.credentials
+            )
             raise Exception(f"Failed to delete VPC '{network_name}'.")
 
         self.logger.info(f"All components of VPC '{network_name}' deleted "

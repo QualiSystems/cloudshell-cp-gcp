@@ -11,7 +11,8 @@ from google.cloud import compute_v1
 
 from cloudshell.cp.gcp.handlers.base import BaseGCPHandler
 
-# if TYPE_CHECKING:
+if TYPE_CHECKING:
+    from google.cloud.compute_v1.types import compute
 
 logger = logging.getLogger(__name__)
 
@@ -30,7 +31,7 @@ class SubnetHandler(BaseGCPHandler):
         subnet_name: str,
         ip_cidr_range: str,
         region: str = None,
-    ) -> str:
+    ) -> compute.Subnetwork:
         """Get subnet by its name or create a new one."""
         with suppress(NotFound):
             subnet = self.get_subnet_by_name(subnet_name, region)
@@ -93,7 +94,7 @@ class SubnetHandler(BaseGCPHandler):
             region = self.region
         return self.subnet_client.get(
             project=self.credentials.project_id, region=region, subnetwork=subnet_name
-        ).name
+        )
 
     def delete(self, subnet_name: str, region: str = None) -> None:
         """Tru to delete subnet by its name."""

@@ -34,9 +34,9 @@ logger = logging.getLogger(__name__)
 
 
 class AbstractGCPDeployFlow(AbstractDeployFlow):
-    instance_handler: InstanceHandler
+    # instance_handler: InstanceHandler
     resource_config: GCPResourceConfig
-    cs_api: CloudShellAPISession
+    # cs_api: CloudShellAPISession
     # reservation_info: ReservationInfo
     cancellation_manager: CancellationContextManager
 

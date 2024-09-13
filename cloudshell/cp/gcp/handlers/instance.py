@@ -110,16 +110,8 @@ class Instance(compute.Instance):
         boot_disk.initialize_params = disk_initialize_params
         instance.disks = [boot_disk]
 
-        # # Create Network Interfaces
-        # for subnet_num, subnet in enumerate(subnets):
-        #     network_interface = compute_v1.NetworkInterface()
-        #     network_interface.name = GCPNameGenerator().iface(
-        #         instance_name=instance.name,
-        #         iface_num=subnet_num
-        #     )
-        #     # network_interface.network = ""
-        #     network_interface.subnetwork = f"projects/{self.resource_config.credentials.project_id}/regions/{subnet.region}/subnetworks/{subnet.name}"
-        #     instance.network_interfaces.append(network_interface)
+        # Create Network Interfaces
+        self._add_interfaces(instance)
 
         # Create Metadata (CS Tags)
         custom_tags = compute_v1.Metadata()
@@ -189,17 +181,9 @@ class Instance(compute.Instance):
 
             instance.disks.append(attached_disk)
 
-        # # Create Network Interfaces
-        # # instance.network_interfaces = instance_template.properties.network_interfaces
-        # for subnet_num, subnet in enumerate(subnets):
-        #     network_interface = compute_v1.NetworkInterface()
-        #     network_interface.name = GCPNameGenerator().iface(
-        #         instance_name=instance.name,
-        #         iface_num=subnet_num
-        #     )
-        #     # network_interface.network = ""
-        #     network_interface.subnetwork = f"projects/{self.resource_config.credentials.project_id}/regions/{subnet.region}/subnetworks/{subnet.name}"
-        #     instance.network_interfaces.append(network_interface)
+        # Create Network Interfaces
+        # instance.network_interfaces = instance_template.properties.network_interfaces
+        self._add_interfaces(instance)
 
         # Create Metadata (CS Tags)
         custom_tags = compute_v1.Metadata()
@@ -250,17 +234,9 @@ class Instance(compute.Instance):
             attached_disk.initialize_params = disk.initialize_params
             instance.disks.append(attached_disk)
 
-        # # Create Network Interfaces
-        # # instance.network_interfaces = machine_image.source_instance_properties.network_interfaces
-        # for subnet_num, subnet in enumerate(subnets):
-        #     network_interface = compute_v1.NetworkInterface()
-        #     network_interface.name = GCPNameGenerator().iface(
-        #         instance_name=instance.name,
-        #         iface_num=subnet_num
-        #     )
-        #     # network_interface.network = ""
-        #     network_interface.subnetwork = f"projects/{self.resource_config.credentials.project_id}/regions/{subnet.region}/subnetworks/{subnet.name}"
-        #     instance.network_interfaces.append(network_interface)
+        # Create Network Interfaces
+        # instance.network_interfaces = machine_image.source_instance_properties.network_interfaces
+        self._add_interfaces(instance)
 
         # Create Metadata (CS Tags)
         custom_tags = compute_v1.Metadata()
@@ -273,6 +249,18 @@ class Instance(compute.Instance):
         instance.metadata = custom_tags
 
         return instance
+
+    def _add_interfaces(self, instance):
+        for subnet_num, subnet in enumerate(self.subnet_list):
+            network_interface = compute_v1.NetworkInterface()
+            network_interface.name = GCPNameGenerator().iface(
+                instance_name=instance.name,
+                iface_num=subnet_num
+            )
+            # network_interface.network = ""
+            network_interface.subnetwork = subnet
+            instance.network_interfaces.append(network_interface)
+
 
 
 @define
@@ -376,7 +364,7 @@ class InstanceHandler(BaseGCPHandler):
         # Wait for the operation to complete
         self.wait_for_operation(name=operation.name, zone=self._zone)
 
-        logger.info(f"VM '{instance_name}' stopped successfully.")
+        logger.info(f"VM '{self.instance.name}' stopped successfully.")
 
     def add_tag(self) -> None:
         """Add tag to existed Virtual Machine."""
