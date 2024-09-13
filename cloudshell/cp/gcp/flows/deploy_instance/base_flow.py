@@ -14,6 +14,8 @@ from cloudshell.cp.gcp.helpers.constants import SET_WIN_PASSWORD_SCRIPT_TPL
 from cloudshell.cp.gcp.actions.firewall_policy_actions import FirewallPolicyActions
 from cloudshell.cp.gcp.handlers.ssh_keys import SSHKeysHandler
 from cloudshell.cp.gcp.handlers.vpc import VPCHandler
+from cloudshell.cp.gcp.handlers.zone import ZoneHandler
+from cloudshell.cp.gcp.handlers.instance import InstanceHandler
 from cloudshell.cp.gcp.helpers.interface_helper import InterfaceHelper
 from cloudshell.cp.gcp.helpers.name_generator import GCPNameGenerator
 from cloudshell.cp.gcp.actions.vm_details_actions import VMDetailsActions
@@ -21,7 +23,7 @@ from cloudshell.cp.gcp.flows.deploy_instance.commands import DeployInstanceComma
 from cloudshell.cp.gcp.helpers.network_tag_helper import get_network_tags, InboundPort
 
 if TYPE_CHECKING:
-    from cloudshell.cp.gcp.handlers.instance import Instance, InstanceHandler
+    from cloudshell.cp.gcp.handlers.instance import Instance
     from cloudshell.cp.gcp.models.deploy_app import BaseGCPDeployApp
     from cloudshell.cp.gcp.resource_conf import GCPResourceConfig
     from cloudshell.api.cloudshell_api import CloudShellAPISession, ReservationInfo
@@ -91,8 +93,11 @@ class AbstractGCPDeployFlow(AbstractDeployFlow):
         )
 
     @abstractmethod
-    def _create_instance(self, deploy_app: BaseGCPDeployApp, subnet_list: list[str],
-                         tags: dict[str, str]) -> Instance:
+    def _create_instance(
+            self,
+            deploy_app: BaseGCPDeployApp,
+            subnet_list: list[str],
+    ) -> Instance:
         """"""
         pass
 
@@ -110,7 +115,17 @@ class AbstractGCPDeployFlow(AbstractDeployFlow):
         if not subnet_list:
             subnet_list = network_handler.get_subnets()
 
+        if not deploy_app.machine_type or deploy_app.machine_type == "Inherited":
+            deploy_app.machine_type = self.resource_config.machine_type
+
         deploy_app.custom_tags = self._get_tags(deploy_app)
+        deploy_app.zone = ZoneHandler(
+            credentials=self.resource_config.credentials,
+            zone=deploy_app.zone
+        ).get_zone(
+            region=self.resource_config.region,
+            machine_type=deploy_app.machine_type
+        )
         with self.cancellation_manager:
             instance = self._create_instance(
                 deploy_app=deploy_app,
@@ -119,13 +134,14 @@ class AbstractGCPDeployFlow(AbstractDeployFlow):
 
         net_tags = self._get_network_tags(instance, deploy_app)
         if net_tags:
-            instance.tags = net_tags.keys()
+            instance.tags = InstanceHandler.add_network_tags(net_tags.keys())
 
         with self._rollback_manager:
             logger.info(f"Creating Instance {instance.name}")
             deployed_instance = DeployInstanceCommand(
                 instance=instance,
                 credentials=self.resource_config.credentials,
+                zone=deploy_app.zone,
                 rollback_manager=self._rollback_manager,
                 cancellation_manager=self.cancellation_manager,
             ).execute()
@@ -175,7 +191,7 @@ class AbstractGCPDeployFlow(AbstractDeployFlow):
         )
 
     def _get_tags(self, deploy_app: BaseGCPDeployApp) -> dict[str, str]:
-        tags = self.resource_config.custom_tags | deploy_app.custom_tags
+        tags = self.resource_config.tags | deploy_app.custom_tags
         tags["ssh-keys"] = self._add_ssh_key(deploy_app)
         if self._is_windows(deploy_app) and deploy_app.password:
             tags["sysprep-specialize-script-ps1"] = (

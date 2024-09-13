@@ -3,6 +3,7 @@ from __future__ import annotations
 from contextlib import suppress
 from typing import TYPE_CHECKING
 
+from attr import define
 from google.cloud.exceptions import NotFound
 
 from cloudshell.cp.core.cancellation_manager import CancellationContextManager
@@ -17,9 +18,11 @@ if TYPE_CHECKING:
     from google.cloud.compute_v1.types import compute
 
 
+@define
 class DeployInstanceCommand(RollbackCommand, GlobalLock):
     instance: compute.Instance
     credentials: Credentials
+    zone: str
     rollback_manager: RollbackCommandsManager
     cancellation_manager: CancellationContextManager
 
@@ -30,11 +33,12 @@ class DeployInstanceCommand(RollbackCommand, GlobalLock):
         )
 
     @GlobalLock.lock
-    def _execute(self) -> str:
+    def _execute(self) -> compute.Instance:
         try:
             self._instance_handler = InstanceHandler.deploy(
                 instance=self.instance,
-                credentials=self.credentials
+                credentials=self.credentials,
+                zone=self.zone,
             )
         except Exception as e:
             raise

@@ -4,6 +4,7 @@ from cloudshell.cp.core.request_actions import DeployVMRequestActions
 from cloudshell.cp.core.request_actions.models import DeployApp
 
 from cloudshell.cp.gcp.helpers import constants
+from cloudshell.cp.gcp.helpers.constants import DISK_TYPE_MAP
 from cloudshell.cp.gcp.helpers.network_tag_helper import parse_port_range
 from cloudshell.cp.gcp.helpers.password_generator import generate_password
 from cloudshell.cp.gcp.models.attributes import (
@@ -48,6 +49,20 @@ class InboundPortsAttrRO(ResourceAttrRODeploymentPath):
                 if port_data]
 
 
+class OnOffBoolAttrRO(ResourceBoolAttrRODeploymentPath):
+    TRUE_VALUES = {"on", "yes", "y"}
+    FALSE_VALUES = {"off", "no", "n"}
+
+
+class DiskTypeAttrRO(ResourceBoolAttrRODeploymentPath):
+    def __get__(self, instance, owner):
+        if instance is None:
+            return self
+
+        attr = instance.attributes.get(self.get_key(instance), self.default)
+        return DISK_TYPE_MAP.get(attr, "pd-standard")
+
+
 class BaseGCPDeployApp(DeployApp):
     _DO_NOT_EDIT_APP_NAME = True
     ATTR_NAMES = BaseGCPDeploymentAppAttributeNames
@@ -56,7 +71,7 @@ class BaseGCPDeployApp(DeployApp):
     zone = ResourceAttrRODeploymentPath(ATTR_NAMES.zone)
     machine_type = ResourceAttrRODeploymentPath(ATTR_NAMES.machine_type)
     maintenance = ResourceAttrRODeploymentPath(ATTR_NAMES.maintenance)
-    auto_restart = ResourceBoolAttrRODeploymentPath(ATTR_NAMES.auto_restart)
+    auto_restart = OnOffBoolAttrRO(ATTR_NAMES.auto_restart)
     ip_forwarding = ResourceBoolAttrRODeploymentPath(ATTR_NAMES.ip_forwarding)
     inbound_ports = InboundPortsAttrRO(ATTR_NAMES.inbound_ports)
     custom_tags = CustomTagsAttrRO(ATTR_NAMES.custom_tags)
@@ -76,7 +91,7 @@ class InstanceFromScratchDeployApp(BaseGCPDeployApp):
     DEPLOYMENT_PATH = constants.VM_FROM_SCRATCH_DEPLOYMENT_PATH
 
     # disk_image_type = ResourceAttrRODeploymentPath(ATTR_NAMES.disk_image_type)
-    disk_type = ResourceAttrRODeploymentPath(ATTR_NAMES.disk_type)
+    disk_type = DiskTypeAttrRO(ATTR_NAMES.disk_type)
     disk_size = ResourceIntAttrRODeploymentPath(ATTR_NAMES.disk_size)
     # disk_rule = ResourceAttrRODeploymentPath(ATTR_NAMES.disk_rule)
     disk_rule = True

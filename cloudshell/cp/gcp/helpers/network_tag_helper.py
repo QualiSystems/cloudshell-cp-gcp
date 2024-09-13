@@ -41,10 +41,10 @@ def get_network_tags(
         name = GCPNameGenerator().firewall_rule(
             instance_name=app_name,
             src_cidr=network_tag.src_address,
-            dst_port_range=network_tag.port_range,
+            dst_port=network_tag.port_range,
             protocol=network_tag.protocol,
         )
-        network_tags[name] = tag
+        network_tags[name] = network_tag
 
     return network_tags
 
@@ -65,9 +65,9 @@ def parse_port_range(port_data):
         msg = f"The value '{port_data}' is not a valid ports rule"
         raise ValueError(msg)
 
-    destination = match.group("destination") or DEFAULT_DESTINATION
+    src_address = match.group("destination") or DEFAULT_DESTINATION
     protocol = match.group("protocol") or DEFAULT_PROTOCOL
     port = f"{from_port}"
     if to_port:
         port = f"{from_port}-{to_port}"
-    return InboundPort(port, protocol, destination)
+    return InboundPort(port_range=port, protocol=protocol, src_address=src_address)

@@ -75,7 +75,7 @@ class GCPNameGenerator:
         self,
         instance_name: str,
         src_cidr: str,
-        dst_port: int,
+        dst_port: str,
         protocol: str
     ) -> str:
         """quali-instance_name-dst-dst_port-protocol"""

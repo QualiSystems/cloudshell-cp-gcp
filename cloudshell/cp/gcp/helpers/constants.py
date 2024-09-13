@@ -38,3 +38,10 @@ PUBLIC_IMAGE_PROJECTS = {
 }
 
 
+DISK_TYPE_MAP = {
+    "Standard": "pd-standard",
+    "SSD": "pd-ssd",
+    "Balanced": "pd-balanced",
+    "Extreme": "pd-extreme",
+}
+
