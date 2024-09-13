@@ -71,6 +71,8 @@ class BaseGCPDeployApp(DeployApp):
     zone = ResourceAttrRODeploymentPath(ATTR_NAMES.zone)
     machine_type = ResourceAttrRODeploymentPath(ATTR_NAMES.machine_type)
     maintenance = ResourceAttrRODeploymentPath(ATTR_NAMES.maintenance)
+    ip_regex = ResourceAttrRODeploymentPath(ATTR_NAMES.ip_regex)
+    refresh_ip_timeout = ResourceIntAttrRODeploymentPath(ATTR_NAMES.refresh_ip_timeout)
     auto_restart = OnOffBoolAttrRO(ATTR_NAMES.auto_restart)
     ip_forwarding = ResourceBoolAttrRODeploymentPath(ATTR_NAMES.ip_forwarding)
     inbound_ports = InboundPortsAttrRO(ATTR_NAMES.inbound_ports)

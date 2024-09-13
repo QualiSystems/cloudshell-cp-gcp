@@ -5,9 +5,10 @@ import json
 from attr import define
 from typing import TYPE_CHECKING
 
+from cloudshell.cp.gcp.handlers.instance import InstanceHandler
 
 if TYPE_CHECKING:
-    from cloudshell.cp.gcp.handlers.instance import InstanceHandler
+
     from cloudshell.cp.gcp.models.deployed_app import BaseGCPDeployApp
     from cloudshell.cp.gcp.resource_conf import GCPResourceConfig
 

@@ -87,7 +87,7 @@ class VPCHandler(BaseGCPHandler):
         operation_client.wait(operation=operation.name, project=credentials.project_id)
 
         logger.info(f"VPC network '{network.name}' created successfully.")
-        return cls(credentials, network)
+        return cls.get_vpc_by_name(credentials=credentials, network_name=network)
 
     def delete(self) -> None:
         operation = self.network_client.delete(

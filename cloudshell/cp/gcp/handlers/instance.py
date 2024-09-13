@@ -225,7 +225,7 @@ class Instance:
 
 @define
 class InstanceHandler(BaseGCPHandler):
-    instance: Instance
+    instance: compute.Instance
 
     @cached_property
     def instance_client(self):

@@ -21,17 +21,14 @@ from cloudshell.cp.gcp.helpers.name_generator import GCPNameGenerator
 from cloudshell.cp.gcp.actions.vm_details_actions import VMDetailsActions
 from cloudshell.cp.gcp.flows.deploy_instance.commands import DeployInstanceCommand
 from cloudshell.cp.gcp.helpers.network_tag_helper import get_network_tags, InboundPort
+from cloudshell.cp.core.request_actions.models import DeployAppResult, Attribute
 
 if TYPE_CHECKING:
     from cloudshell.cp.gcp.handlers.instance import Instance
     from cloudshell.cp.gcp.models.deploy_app import BaseGCPDeployApp
     from cloudshell.cp.gcp.resource_conf import GCPResourceConfig
-    from cloudshell.api.cloudshell_api import CloudShellAPISession, ReservationInfo
     from cloudshell.cp.core.cancellation_manager import CancellationContextManager
-    from cloudshell.cp.core.request_actions.models import (
-        DeployAppResult,
-        VmDetailsData,
-    )
+    from cloudshell.cp.core.request_actions.models import VmDetailsData
 
 logger = logging.getLogger(__name__)
 
@@ -74,7 +71,7 @@ class AbstractGCPDeployFlow(AbstractDeployFlow):
             vmUuid=json.dumps(
                 {
                     "instance_name": instance_handler.instance.name,
-                    "zone": instance_handler.instance.zone
+                    "zone": instance_handler.instance.zone.rsplit("/", 1)[-1],
                 }
             ),
             vmName=instance_handler.instance.name,
@@ -82,8 +79,8 @@ class AbstractGCPDeployFlow(AbstractDeployFlow):
             deployedAppAdditionalData={
                 "ip_regex": deploy_app.ip_regex,
                 "refresh_ip_timeout": deploy_app.refresh_ip_timeout,
-                "auto_power_off": deploy_app.auto_power_off,
-                "auto_delete": deploy_app.auto_delete,
+                # "auto_power_off": deploy_app.auto_power_off,
+                # "auto_delete": deploy_app.auto_delete,
             },
             deployedAppAttributes=self._prepare_app_attrs(
                 deploy_app,
@@ -146,7 +143,7 @@ class AbstractGCPDeployFlow(AbstractDeployFlow):
                 cancellation_manager=self.cancellation_manager,
             ).execute()
 
-        logger.info(f"Instance {deployed_instance.name} created")
+        logger.info(f"Instance {deployed_instance.instance.name} created")
 
         firewall_actions = FirewallPolicyActions(
             credentials=self.resource_config.credentials
@@ -158,7 +155,8 @@ class AbstractGCPDeployFlow(AbstractDeployFlow):
                 inbound_port=inbound_port,
             )
 
-        logger.info(f"Preparing Deploy App result for the {deployed_instance.name}")
+        logger.info(f"Preparing Deploy App result for the "
+                    f"{deployed_instance.instance.name}")
         return self._prepare_deploy_app_result(
             deploy_app=deploy_app,
             instance_handler=deployed_instance,
@@ -173,7 +171,9 @@ class AbstractGCPDeployFlow(AbstractDeployFlow):
     ) -> list[Attribute]:
         deployed_app_attrs = [
             Attribute("User", deploy_app.user),
-            Attribute("Public IP", InterfaceHelper.get_public_ip(instance_handler)),
+            Attribute("Public IP", InterfaceHelper(
+                instance_handler.instance
+            ).get_public_ip()),
         ]
         if password:
             deployed_app_attrs.append(Attribute("Password", password))

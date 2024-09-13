@@ -43,7 +43,7 @@ class DeployInstanceCommand(RollbackCommand, GlobalLock):
         except Exception as e:
             raise
 
-        return self._instance_handler.instance
+        return self._instance_handler
 
     def rollback(self):
         with suppress(NotFound):
