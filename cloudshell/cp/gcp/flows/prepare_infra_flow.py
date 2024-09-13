@@ -54,7 +54,8 @@ class PrepareGCPInfraFlow(AbstractPrepareSandboxInfraFlow):
                         network_name=self.vpc,
                         ip_cidr_range=subnet_request.get_cidr(),
                         subnet_name=self.name_generator.subnet(
-                            subnet_request.get_alias()
+                            subnet_request.get_alias() or
+                            f"Subnet {subnet_request.get_cidr().replace('/', '-')}",
                         ),
                         region=self.config.region,
                     ).self_link

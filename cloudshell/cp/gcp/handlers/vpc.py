@@ -75,12 +75,16 @@ class VPCHandler(BaseGCPHandler):
             project=credentials.project_id, network_resource=network
         )
 
+        logger.info(
+            f"Creating Network in {credentials.project_id}, "
+            f"operation: {operation.name}"
+        )
         # Wait for the operation to complete
         operation_client = compute_v1.GlobalOperationsClient(
             credentials=credentials
         )
 
-        operation_client.wait(operation=operation.name)
+        operation_client.wait(operation=operation.name, project=credentials.project_id)
 
         logger.info(f"VPC network '{network.name}' created successfully.")
         return cls(credentials, network)

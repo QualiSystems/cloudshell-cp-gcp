@@ -5,6 +5,7 @@ import logging
 from abc import abstractmethod
 from typing import TYPE_CHECKING
 
+from attr import define
 from cloudshell.cp.core.flows import AbstractDeployFlow
 from cloudshell.cp.core.request_actions import DeployVMRequestActions
 from cloudshell.cp.core.rollback import RollbackCommandsManager
@@ -33,11 +34,9 @@ if TYPE_CHECKING:
 logger = logging.getLogger(__name__)
 
 
+@define
 class AbstractGCPDeployFlow(AbstractDeployFlow):
-    # instance_handler: InstanceHandler
     resource_config: GCPResourceConfig
-    # cs_api: CloudShellAPISession
-    # reservation_info: ReservationInfo
     cancellation_manager: CancellationContextManager
 
     def __attrs_post_init__(self):
@@ -51,8 +50,8 @@ class AbstractGCPDeployFlow(AbstractDeployFlow):
     ) -> VmDetailsData:
         """Prepare CloudShell VM Details model."""
         vm_details_actions = VMDetailsActions(
-            config=self._resource_config,
-            logger=self._logger,
+            config=self.resource_config,
+            logger=logger,
         )
         return vm_details_actions.prepare_vm_details(deployed_vm)
 
@@ -92,8 +91,8 @@ class AbstractGCPDeployFlow(AbstractDeployFlow):
         )
 
     @abstractmethod
-    def _create_instance(self, deploy_app: BaseGCPDeployApp, subnet_list: list[str]) \
-            -> Instance:
+    def _create_instance(self, deploy_app: BaseGCPDeployApp, subnet_list: list[str],
+                         tags: dict[str, str]) -> Instance:
         """"""
         pass
 
@@ -111,24 +110,16 @@ class AbstractGCPDeployFlow(AbstractDeployFlow):
         if not subnet_list:
             subnet_list = network_handler.get_subnets()
 
+        deploy_app.custom_tags = self._get_tags(deploy_app)
         with self.cancellation_manager:
             instance = self._create_instance(
                 deploy_app=deploy_app,
-                subnet_list=subnet_list
+                subnet_list=subnet_list,
             )
 
         net_tags = self._get_network_tags(instance, deploy_app)
         if net_tags:
             instance.tags = net_tags.keys()
-
-        if self._is_windows(deploy_app) and deploy_app.password:
-            instance.metadata["sysprep-specialize-script-ps1"] = \
-                (
-                    SET_WIN_PASSWORD_SCRIPT_TPL.format(
-                        password=deploy_app.password,
-                        user=deploy_app.user
-                    )
-                )
 
         with self._rollback_manager:
             logger.info(f"Creating Instance {instance.name}")
@@ -186,6 +177,14 @@ class AbstractGCPDeployFlow(AbstractDeployFlow):
     def _get_tags(self, deploy_app: BaseGCPDeployApp) -> dict[str, str]:
         tags = self.resource_config.custom_tags | deploy_app.custom_tags
         tags["ssh-keys"] = self._add_ssh_key(deploy_app)
+        if self._is_windows(deploy_app) and deploy_app.password:
+            tags["sysprep-specialize-script-ps1"] = (
+                    SET_WIN_PASSWORD_SCRIPT_TPL.format(
+                        password=deploy_app.password,
+                        user=deploy_app.user
+                    )
+                )
+        return tags
 
     def _get_network_tags(
             self,

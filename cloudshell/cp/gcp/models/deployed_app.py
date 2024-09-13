@@ -16,6 +16,7 @@ from cloudshell.cp.gcp.models.attributes import (
     GCPFromTemplateDeploymentAppAttributeNames,
     GCPFromVMImageDeploymentAppAttributeNames,
 )
+from cloudshell.cp.gcp.models.deploy_app import CustomTagsAttrRO
 
 
 class BaseGCPDeployedApp(DeployedApp):
@@ -30,7 +31,7 @@ class BaseGCPDeployedApp(DeployedApp):
     # network = ResourceAttrRODeploymentPath(ATTR_NAMES.network)
     # sub_network = ResourceAttrRODeploymentPath(ATTR_NAMES.sub_network)
     inbound_ports = ResourceAttrRODeploymentPath(ATTR_NAMES.inbound_ports)
-    custom_tags = ResourceAttrRODeploymentPath(ATTR_NAMES.custom_tags)
+    custom_tags = CustomTagsAttrRO(ATTR_NAMES.custom_tags)
     wait_for_ip = ResourceBoolAttrRODeploymentPath(ATTR_NAMES.wait_for_ip)
     add_public_ip = ResourceBoolAttrRODeploymentPath(ATTR_NAMES.add_public_ip)
     autoload = ResourceBoolAttrRODeploymentPath(ATTR_NAMES.autoload)

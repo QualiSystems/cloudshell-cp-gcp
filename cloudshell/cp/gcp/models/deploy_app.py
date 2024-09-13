@@ -16,6 +16,27 @@ from cloudshell.cp.gcp.models.attributes import (
     GCPFromVMImageDeploymentAppAttributeNames,
 )
 
+class CustomTagsAttrRO(ResourceAttrRODeploymentPath):
+    def __get__(self, instance, owner):
+        if instance is None:
+            return self
+
+        attr = instance.attributes.get(self.get_key(instance), self.default)
+        if attr:
+            try:
+                return {
+                    tag_key.strip(): tag_val.strip()
+                    for tag_key, tag_val in [
+                        tag_data.split("=") for tag_data in attr.split(";") if tag_data
+                    ]
+                }
+            except ValueError:
+                raise Exception(
+                    "'Custom Tags' attribute is in incorrect format"
+                )
+
+        return {}
+
 
 class InboundPortsAttrRO(ResourceAttrRODeploymentPath):
     def __get__(self, instance, owner):
@@ -38,7 +59,7 @@ class BaseGCPDeployApp(DeployApp):
     auto_restart = ResourceBoolAttrRODeploymentPath(ATTR_NAMES.auto_restart)
     ip_forwarding = ResourceBoolAttrRODeploymentPath(ATTR_NAMES.ip_forwarding)
     inbound_ports = InboundPortsAttrRO(ATTR_NAMES.inbound_ports)
-    custom_tags = ResourceAttrRODeploymentPath(ATTR_NAMES.custom_tags)
+    custom_tags = CustomTagsAttrRO(ATTR_NAMES.custom_tags)
     wait_for_ip = ResourceBoolAttrRODeploymentPath(ATTR_NAMES.wait_for_ip)
     add_public_ip = ResourceBoolAttrRODeploymentPath(ATTR_NAMES.add_public_ip)
     autoload = ResourceBoolAttrRODeploymentPath(ATTR_NAMES.autoload)

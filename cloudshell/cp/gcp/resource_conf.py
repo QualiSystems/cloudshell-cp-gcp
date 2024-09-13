@@ -78,7 +78,8 @@ class GCPResourceConfig(BaseConfig):
     machine_type: str = attr(ATTR_NAMES.machine_type)
     networks_in_use: str = attr(ATTR_NAMES.networks_in_use)
     keypairs_location: str = attr(ATTR_NAMES.keypairs_location)
-    additional_mgmt_networks: list = attr(ATTR_NAMES.additional_mgmt_networks)
+    additional_mgmt_networks: list = attr(ATTR_NAMES.additional_mgmt_networks,
+                                          default="")
     credentials: Credentials = attr(
         ATTR_NAMES.json_keys, is_password=True, converter=get_credentials
     )
@@ -87,7 +88,7 @@ class GCPResourceConfig(BaseConfig):
         default="",
         converter=get_custom_tags
     )
-    availability_zone: str = attr(ATTR_NAMES.zone)
+    # availability_zone: str = attr(ATTR_NAMES.zone)
 
     @cached_property
     def reservation_info(self) -> ReservationInfo:

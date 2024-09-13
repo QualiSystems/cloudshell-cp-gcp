@@ -9,7 +9,6 @@ from typing_extensions import TYPE_CHECKING
 
 from cloudshell.cp.gcp.handlers.firewall_rule import FirewallRuleHandler
 from cloudshell.cp.gcp.helpers.network_tag_helper import InboundPort
-from cloudshell.cp.gcp.resource_conf import GCPResourceConfig
 
 if TYPE_CHECKING:
     from google.auth.credentials import Credentials
@@ -86,7 +85,7 @@ class FirewallPolicyActions:
                 dst_cidr=action.get_cidr(),
                 protocol="all",
                 priority=self._lower_priority,
-            )
+            ).priority
 
         return result
 
@@ -115,7 +114,7 @@ class FirewallPolicyActions:
                 dst_cidr=subnet_cidr,
                 allowed=False,
                 priority=self._lower_priority,
-            )
+            ).priority
 
     def _create_nsg_additional_mgmt_networks_rules(
             self,
@@ -141,7 +140,7 @@ class FirewallPolicyActions:
                 src_cidr=mgmt_network,
                 dst_cidr=request_actions.sandbox_cidr,
                 priority=self._higher_priority
-            )
+            ).priority
 
     def _create_nsg_deny_traffic_from_other_sandboxes_rule(
         self,

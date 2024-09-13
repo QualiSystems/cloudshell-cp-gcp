@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import re
 
-SHELL_NAME = "Google Cloud Provider Shell 2G"
+SHELL_NAME = "Google GCP Cloud Provider 2G"
 
 VM_FROM_SCRATCH_DEPLOYMENT_PATH = f"{SHELL_NAME}.GCP Instance From Scratch"
 VM_FROM_TEMPLATE_DEPLOYMENT_PATH = f"{SHELL_NAME}.GCP Instance From Template"

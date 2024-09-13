@@ -10,6 +10,10 @@ if TYPE_CHECKING:
 
 
 class GCPDeployInstanceFromTemplateFlow(AbstractGCPDeployFlow):
+
+    def _is_windows(self, deploy_app: InstanceFromTemplateDeployApp) -> bool:
+        return any(x for x in [deploy_app.disk_image, deploy_app.project_cloud] if "windows" in x)
+
     def _create_instance(
         self,
         deploy_app: InstanceFromTemplateDeployApp,

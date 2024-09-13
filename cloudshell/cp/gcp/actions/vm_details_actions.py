@@ -18,7 +18,7 @@ from cloudshell.cp.gcp.helpers.interface_helper import InterfaceHelper
 
 if typing.TYPE_CHECKING:
     from cloudshell.cp.gcp.resource_conf import GCPResourceConfig
-    from cloudshell.cp.gcp.handlers.instance import Instance, InstanceHandler
+    from cloudshell.cp.gcp.handlers.instance import InstanceHandler
 
 
 @define

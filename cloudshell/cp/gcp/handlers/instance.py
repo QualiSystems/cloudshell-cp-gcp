@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import logging
 from functools import cached_property
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Union
 
 from attrs import define
 from google.cloud import compute_v1
@@ -26,25 +26,11 @@ logger = logging.getLogger(__name__)
 
 
 @define
-class Instance(compute.Instance):
-    deploy_app: [InstanceFromScratchDeployApp, InstanceFromTemplateDeployApp, InstanceFromMachineImageDeployApp]
+class Instance:
+    deploy_app: Union[InstanceFromScratchDeployApp, InstanceFromTemplateDeployApp,
+                 InstanceFromMachineImageDeployApp]
     resource_config: GCPResourceConfig
     subnet_list: list[str]
-
-
-    """
-        def _prepare_subnets_attachments(
-            self,
-            subnets: list[compute.Subnetwork]
-    ) -> list[dict[str:str]]:
-        return [
-            {
-                "network": f"projects/{self.credentials.project_id}/global/networks/{subnet.network_name}",
-                "subnetwork": f"projects/{self.credentials.project_id}/regions/{subnet.region}/subnetworks/{subnet.subnet_name}",
-            }
-            for subnet in subnets
-        ]
-    """
 
     @property
     def zone_name(self):
@@ -53,7 +39,9 @@ class Instance(compute.Instance):
         Zone value depends on provided zone, region and/or machine type.
         """
         if not self.deploy_app.zone:
-            region_client = compute_v1.RegionsClient()
+            region_client = compute_v1.RegionsClient(
+                credentials=self.resource_config.credentials
+            )
             region_info = region_client.get(
                 project=self.resource_config.credentials.project_id,
                 region=self.resource_config.region
@@ -63,18 +51,20 @@ class Instance(compute.Instance):
         else:
             zones = [self.deploy_app.zone]
 
-        machine_type_client = compute_v1.MachineTypesClient()
+        machine_type_client = compute_v1.MachineTypesClient(
+            credentials=self.resource_config.credentials
+        )
 
         # List all machine types in the specified zone
         for zone in zones:
             machine_types = machine_type_client.list(
                 project=self.resource_config.credentials.project_id,
-                zone=self._zone
+                zone=zone
             )
             for machine_type in machine_types:
                 if self.deploy_app.machine_type == machine_type.name:
                     return zone
-        
+
         raise AttributeGCPError("Incompatible zone and machine type values.")
 
     def from_scratch(self):
@@ -128,7 +118,9 @@ class Instance(compute.Instance):
     def from_template(self):
         """"""
 
-        template_client = compute_v1.InstanceTemplatesClient()
+        template_client = compute_v1.InstanceTemplatesClient(
+            credentials=self.resource_config.credentials
+        )
 
         # Get the instance template
         instance_template = template_client.get(
@@ -199,7 +191,9 @@ class Instance(compute.Instance):
 
     def from_machine_image(self): # machine_image.source_instance_properties
         """"""
-        machine_image_client = compute_v1.MachineImagesClient()
+        machine_image_client = compute_v1.MachineImagesClient(
+            credentials=self.resource_config.credentials
+        )
 
         # Get the machine image
         machine_image = machine_image_client.get(
