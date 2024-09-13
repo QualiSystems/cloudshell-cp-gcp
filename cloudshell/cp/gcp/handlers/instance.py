@@ -218,8 +218,13 @@ class Instance:
                 instance_name=instance.name,
                 iface_num=subnet_num
             )
-            # network_interface.network = ""
             network_interface.subnetwork = subnet
+
+            access_config = compute_v1.AccessConfig()
+            access_config.name = network_interface.name
+            access_config.type_ = "ONE_TO_ONE_NAT"
+            network_interface.access_configs = [access_config]
+
             instance.network_interfaces.append(network_interface)
 
 
