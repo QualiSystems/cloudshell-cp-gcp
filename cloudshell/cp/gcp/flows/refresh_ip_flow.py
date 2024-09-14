@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import json
+
 from attr import define
 from typing_extensions import TYPE_CHECKING
 
@@ -24,8 +26,10 @@ class GCPRefreshIPFlow:
     _resource_config: GCPResourceConfig
     _cancellation_manager: CancellationContextManager
 
-    def _get_instance(self, instance_name) -> compute.Instance:
-        return InstanceHandler.get_vm_by_name(instance_name)
+    def _get_instance(self, instance_uuid) -> compute.Instance:
+        instance_data = json.loads(instance_uuid)
+        instance_data["credentials"] = self._resource_config.credentials
+        return InstanceHandler.get(**instance_data).instance
 
     def refresh_ip(self) -> str:
         internal_ip = ""
@@ -41,7 +45,7 @@ class GCPRefreshIPFlow:
             external_ip = network_interface.get_public_ip()
             if not internal_ip:
                 raise Exception("Internal IP address not found")
-            self._deployed_app.update_private_ip(self._deployed_app.name, ip)
+            self._deployed_app.update_private_ip(self._deployed_app.name, internal_ip)
             if external_ip:
                 self._deployed_app.update_public_ip(
                     external_ip

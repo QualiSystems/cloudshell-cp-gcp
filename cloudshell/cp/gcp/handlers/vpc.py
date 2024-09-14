@@ -48,8 +48,7 @@ class VPCHandler(BaseGCPHandler):
         """Get VPC instance by Sandbox ID."""
         logger.info("Getting VPC")
         network_name = GCPNameGenerator().network(sandbox_id)
-        network = cls.get_vpc_by_name(network_name, credentials)
-        return network
+        return cls.get_vpc_by_name(network_name, credentials)
 
     @classmethod
     def get_or_create_vpc(cls, sandbox_id: str, credentials: compute.Credentials) -> (
@@ -87,7 +86,7 @@ class VPCHandler(BaseGCPHandler):
         operation_client.wait(operation=operation.name, project=credentials.project_id)
 
         logger.info(f"VPC network '{network.name}' created successfully.")
-        return cls.get_vpc_by_name(credentials=credentials, network_name=network)
+        return cls.get_vpc_by_name(credentials=credentials, network_name=network.name)
 
     def delete(self) -> None:
         operation = self.network_client.delete(

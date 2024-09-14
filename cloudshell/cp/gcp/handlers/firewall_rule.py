@@ -23,17 +23,21 @@ class FirewallRuleHandler(BaseGCPHandler):
     def firewall_client(self):
         return compute_v1.FirewallsClient(credentials=self.credentials)
 
-    def get_higher_priority(self, network_name: str) -> int:
+    def get_higher_priority(self, network_name: str, start_priority=4000) -> int:
         """Get the next available priority for the security group."""
         rules = self.list_firewall_rules_by_network(network_name)
-        priorities = [rule.priority for rule in (rules.allowed | rules.denied)]
-        return max(priorities) + 1 if priorities else 4000
+        priorities = [rule.priority for rule in rules]
+        if start_priority in priorities:
+            return self.get_higher_priority(network_name, start_priority + 1)
+        return start_priority
 
-    def get_lower_priority(self, network_name: str) -> int:
+    def get_lower_priority(self, network_name: str, max_priority=2000) -> int:
         """Get the next available priority for the security group."""
         rules = self.list_firewall_rules_by_network(network_name)
-        priorities = [rule.priority for rule in (rules.allowed | rules.denied)]
-        return min(priorities) - 1 if priorities else 1000
+        priorities = [rule.priority for rule in rules]
+        if max_priority in priorities:
+            return self.get_lower_priority(network_name, max_priority - 1)
+        return max_priority
 
     def list_firewall_rules_by_network(self, network_name) -> list[Firewall]:
         """List all Security Groups."""
@@ -118,7 +122,7 @@ class FirewallRuleHandler(BaseGCPHandler):
                 direction="INGRESS",
                 allowed=[ports_rule],
                 source_ranges=[src_cidr],  # Specify source IP ranges
-                destination_ranges=[dst_cidr],  # Specify destination IP ranges
+                # destination_ranges=[dst_cidr],  # Specify destination IP ranges
                 priority=priority,
                 target_tags=[network_tag] if network_tag else None
             )
@@ -131,7 +135,7 @@ class FirewallRuleHandler(BaseGCPHandler):
                 direction="INGRESS",
                 denied=[ports_rule],
                 source_ranges=[src_cidr],  # Specify source IP ranges
-                destination_ranges=[dst_cidr],  # Specify destination IP ranges
+                # destination_ranges=[dst_cidr],  # Specify destination IP ranges
                 priority=priority,
             )
 

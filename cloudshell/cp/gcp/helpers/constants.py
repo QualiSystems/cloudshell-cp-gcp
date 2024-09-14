@@ -4,7 +4,7 @@ import re
 
 SHELL_NAME = "Google GCP Cloud Provider 2G"
 
-VM_FROM_SCRATCH_DEPLOYMENT_PATH = f"{SHELL_NAME}.GCP Instance From Scratch"
+VM_FROM_SCRATCH_DEPLOYMENT_PATH = f"{SHELL_NAME}.GCP Instance From Image"
 VM_FROM_TEMPLATE_DEPLOYMENT_PATH = f"{SHELL_NAME}.GCP Instance From Template"
 VM_FROM_MACHINE_IMAGE_DEPLOYMENT_PATH = f"{SHELL_NAME}.GCP Instance From Machine Image" # noqa E501
 

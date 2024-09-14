@@ -56,6 +56,7 @@ class PrepareGCPInfraFlow(AbstractPrepareSandboxInfraFlow):
                         subnet_name=self.name_generator.subnet(
                             subnet_request.get_alias() or
                             f"Subnet {subnet_request.get_cidr().replace('/', '-')}",
+                            self.config.reservation_info.reservation_id
                         ),
                         region=self.config.region,
                     ).self_link

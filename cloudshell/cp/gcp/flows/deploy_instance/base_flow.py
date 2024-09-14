@@ -110,7 +110,7 @@ class AbstractGCPDeployFlow(AbstractDeployFlow):
         deploy_app: BaseGCPDeployApp = request_actions.deploy_app
         subnet_list = [x.subnet_id for x in request_actions.connect_subnets]
         if not subnet_list:
-            subnet_list = network_handler.get_subnets()
+            subnet_list = list(network_handler.get_subnets())
 
         if not deploy_app.machine_type or deploy_app.machine_type == "Inherited":
             deploy_app.machine_type = self.resource_config.machine_type

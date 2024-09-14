@@ -8,7 +8,7 @@ from typing import TYPE_CHECKING
 from cloudshell.cp.gcp.handlers.instance import InstanceHandler
 
 if TYPE_CHECKING:
-
+    from google.cloud.compute_v1.types import compute
     from cloudshell.cp.gcp.models.deployed_app import BaseGCPDeployApp
     from cloudshell.cp.gcp.resource_conf import GCPResourceConfig
 
@@ -18,10 +18,10 @@ class GCPPowerFlow:
     deployed_app: BaseGCPDeployApp
     resource_config: GCPResourceConfig
 
-    def _get_instance(self, instance_uuid) -> InstanceHandler:
+    def _get_instance(self, instance_uuid) -> compute.Instance:
         instance_data = json.loads(instance_uuid)
         instance_data["credentials"] = self.resource_config.credentials
-        return InstanceHandler.get(**instance_data)
+        return InstanceHandler.get(**instance_data).instance
 
     def power_on(self):
         instance = self._get_instance(self.deployed_app.vmdetails.uid)

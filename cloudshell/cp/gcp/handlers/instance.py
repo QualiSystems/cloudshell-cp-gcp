@@ -125,7 +125,7 @@ class Instance:
                 else:
                     disk_initialize_params.disk_type = disk.initialize_params.disk_type
 
-                if self.deploy_app.disk_image:
+                if self.deploy_app.project_cloud and self.deploy_app.disk_image:
                     disk_initialize_params.source_image = f"projects/{self.deploy_app.project_cloud}/global/images/{self.deploy_app.disk_image}"
                 else:
                     disk_initialize_params.source_image = disk.initialize_params.source_image
@@ -135,6 +135,7 @@ class Instance:
                 attached_disk.auto_delete = disk.auto_delete
                 attached_disk.boot = disk.boot
                 attached_disk.type_ = disk.type_
+
                 attached_disk.initialize_params = disk.initialize_params
 
             instance.disks.append(attached_disk)
@@ -163,8 +164,8 @@ class Instance:
 
         # Get the machine image
         machine_image = machine_image_client.get(
-            project=self.resource_config.project_id,
-            machine_image=self.deploy_app.machine_image_name
+            project=self.resource_config.credentials.project_id,
+            machine_image=self.deploy_app.machine_image
         )
 
         # Prepare the instance configuration
@@ -192,7 +193,7 @@ class Instance:
             attached_disk.auto_delete = disk.auto_delete
             attached_disk.boot = disk.boot
             attached_disk.type_ = disk.type_
-            attached_disk.initialize_params = disk.initialize_params
+            # attached_disk.initialize_params = disk.initialize_params
             instance.disks.append(attached_disk)
 
         # Create Network Interfaces
@@ -219,11 +220,11 @@ class Instance:
                 iface_num=subnet_num
             )
             network_interface.subnetwork = subnet
-
-            access_config = compute_v1.AccessConfig()
-            access_config.name = network_interface.name
-            access_config.type_ = "ONE_TO_ONE_NAT"
-            network_interface.access_configs = [access_config]
+            if self.deploy_app.add_public_ip:
+                access_config = compute_v1.AccessConfig()
+                access_config.name = network_interface.name
+                access_config.type_ = "ONE_TO_ONE_NAT"
+                network_interface.access_configs = [access_config]
 
             instance.network_interfaces.append(network_interface)
 

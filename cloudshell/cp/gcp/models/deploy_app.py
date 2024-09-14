@@ -4,7 +4,7 @@ from cloudshell.cp.core.request_actions import DeployVMRequestActions
 from cloudshell.cp.core.request_actions.models import DeployApp
 
 from cloudshell.cp.gcp.helpers import constants
-from cloudshell.cp.gcp.helpers.constants import DISK_TYPE_MAP
+from cloudshell.cp.gcp.helpers.constants import DISK_TYPE_MAP, PUBLIC_IMAGE_PROJECTS
 from cloudshell.cp.gcp.helpers.network_tag_helper import parse_port_range
 from cloudshell.cp.gcp.helpers.password_generator import generate_password
 from cloudshell.cp.gcp.models.attributes import (
@@ -63,6 +63,15 @@ class DiskTypeAttrRO(ResourceBoolAttrRODeploymentPath):
         return DISK_TYPE_MAP.get(attr, "pd-standard")
 
 
+class ImageProjectAttrRO(ResourceAttrRODeploymentPath):
+    def __get__(self, instance, owner):
+        if instance is None:
+            return self
+
+        attr = instance.attributes.get(self.get_key(instance), self.default)
+        return PUBLIC_IMAGE_PROJECTS.get(attr, attr)
+
+
 class BaseGCPDeployApp(DeployApp):
     _DO_NOT_EDIT_APP_NAME = True
     ATTR_NAMES = BaseGCPDeploymentAppAttributeNames
@@ -97,7 +106,7 @@ class InstanceFromScratchDeployApp(BaseGCPDeployApp):
     disk_size = ResourceIntAttrRODeploymentPath(ATTR_NAMES.disk_size)
     # disk_rule = ResourceAttrRODeploymentPath(ATTR_NAMES.disk_rule)
     disk_rule = True
-    project_cloud = ResourceAttrRODeploymentPath(ATTR_NAMES.project_cloud)
+    project_cloud = ImageProjectAttrRO(ATTR_NAMES.project_cloud)
     disk_image = ResourceAttrRODeploymentPath(ATTR_NAMES.disk_image)
 
     @property

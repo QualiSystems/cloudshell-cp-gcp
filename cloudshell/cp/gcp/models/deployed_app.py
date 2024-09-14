@@ -16,7 +16,7 @@ from cloudshell.cp.gcp.models.attributes import (
     GCPFromTemplateDeploymentAppAttributeNames,
     GCPFromVMImageDeploymentAppAttributeNames,
 )
-from cloudshell.cp.gcp.models.deploy_app import CustomTagsAttrRO
+from cloudshell.cp.gcp.models.deploy_app import CustomTagsAttrRO, OnOffBoolAttrRO
 
 
 class BaseGCPDeployedApp(DeployedApp):
@@ -26,7 +26,7 @@ class BaseGCPDeployedApp(DeployedApp):
     zone = ResourceAttrRODeploymentPath(ATTR_NAMES.zone)
     machine_type = ResourceAttrRODeploymentPath(ATTR_NAMES.machine_type)
     maintenance = ResourceAttrRODeploymentPath(ATTR_NAMES.maintenance)
-    auto_restart = ResourceBoolAttrRODeploymentPath(ATTR_NAMES.auto_restart)
+    auto_restart = OnOffBoolAttrRO(ATTR_NAMES.auto_restart)
     ip_forwarding = ResourceBoolAttrRODeploymentPath(ATTR_NAMES.ip_forwarding)
     ip_regex = ResourceAttrRODeploymentPath(ATTR_NAMES.ip_regex)
     refresh_ip_timeout = ResourceIntAttrRODeploymentPath(ATTR_NAMES.refresh_ip_timeout)
