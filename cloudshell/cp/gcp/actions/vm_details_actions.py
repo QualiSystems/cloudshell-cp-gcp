@@ -125,7 +125,7 @@ class VMDetailsActions:
 
             vm_network_interface = VmDetailsNetworkInterface(
                 interfaceId=index,
-                networkId=subnet_name,
+                networkId=subnet_name[subnet_name.find("/project"):],
                 isPrimary=is_primary,
                 networkData=network_data,
                 privateIpAddress=private_ip,

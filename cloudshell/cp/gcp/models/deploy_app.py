@@ -60,7 +60,7 @@ class DiskTypeAttrRO(ResourceBoolAttrRODeploymentPath):
             return self
 
         attr = instance.attributes.get(self.get_key(instance), self.default)
-        return DISK_TYPE_MAP.get(attr, "pd-standard")
+        return DISK_TYPE_MAP.get(attr, "")
 
 
 class ImageProjectAttrRO(ResourceAttrRODeploymentPath):
@@ -122,6 +122,7 @@ class InstanceFromTemplateDeployApp(InstanceFromScratchDeployApp):
 
     DEPLOYMENT_PATH = constants.VM_FROM_TEMPLATE_DEPLOYMENT_PATH
     template_name = ResourceAttrRODeploymentPath(ATTR_NAMES.template_name)
+    auto_restart = ResourceAttrRODeploymentPath(ATTR_NAMES.auto_restart)
 
 
 class InstanceFromMachineImageDeployApp(BaseGCPDeployApp):

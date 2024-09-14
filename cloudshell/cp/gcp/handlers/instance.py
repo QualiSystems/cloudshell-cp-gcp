@@ -5,8 +5,10 @@ from functools import cached_property
 from typing import TYPE_CHECKING
 
 from attrs import define
+from contextlib import suppress
 from google.cloud import compute_v1
 from google.cloud.compute_v1.types import compute
+from google.cloud.exceptions import NotFound
 
 from cloudshell.cp.gcp.handlers.base import BaseGCPHandler
 from cloudshell.cp.gcp.helpers.name_generator import GCPNameGenerator
@@ -83,16 +85,31 @@ class Instance:
 
     def from_template(self):
         """"""
+        instance_template = None
+        with suppress(NotFound):
+            template_client = compute_v1.InstanceTemplatesClient(
+                credentials=self.resource_config.credentials
+            )
 
-        template_client = compute_v1.InstanceTemplatesClient(
-            credentials=self.resource_config.credentials
-        )
+            # Get the instance template
+            instance_template = template_client.get(
+                project=self.resource_config.credentials.project_id,
+                instance_template=self.deploy_app.template_name
+            )
+        if not instance_template:
+            with suppress(NotFound):
+                template_client = compute_v1.RegionInstanceTemplatesClient(
+                    credentials=self.resource_config.credentials
+                )
+                instance_template = template_client.get(
+                    project=self.resource_config.credentials.project_id,
+                    region=self.resource_config.region,
+                    instance_template="quali-ubuntu-instance-template"
 
-        # Get the instance template
-        instance_template = template_client.get(
-            project=self.resource_config.project_id,
-            instance_template=self.deploy_app.template_name
-        )
+                )
+        if not instance_template:
+            raise Exception(f"Instance Template {self.deploy_app.template_name} not found.")
+
 
         # Prepare instance configuration based on the template
         instance = compute_v1.Instance()
@@ -102,12 +119,16 @@ class Instance:
         )
 
         instance.can_ip_forward = self.deploy_app.ip_forwarding or instance_template.properties.can_ip_forward
-        instance.machine_type = f"zones/{self.deploy_app.zone}/machineTypes/{self.deploy_app.machine_type}" or instance_template.properties.machine_type
+
+        if self.deploy_app.machine_type:
+            instance.machine_type = f"zones/{self.deploy_app.zone}/machineTypes/{self.deploy_app.machine_type}"
+        else:
+            instance.machine_type = instance_template.properties.machine_type
 
         # instance.tags = ["str", "str"]
 
         scheduling = compute_v1.Scheduling()
-        scheduling.automatic_restart = self.deploy_app.auto_restart or instance_template.properties.scheduling.automatic_restart
+        scheduling.automatic_restart = self.deploy_app.auto_restart.lower() == "on" or instance_template.properties.scheduling.automatic_restart
         scheduling.on_host_maintenance = self.deploy_app.maintenance or instance_template.properties.scheduling.on_host_maintenance
         instance.scheduling = scheduling
 
@@ -123,10 +144,16 @@ class Instance:
                 if self.deploy_app.disk_type:
                     disk_initialize_params.disk_type = f"zones/{self.deploy_app.zone}/diskTypes/{self.deploy_app.disk_type}"
                 else:
-                    disk_initialize_params.disk_type = disk.initialize_params.disk_type
+                    if disk_initialize_params.disk_type.startswith("zones/"):
+                        disk_initialize_params.disk_type = disk.initialize_params.disk_type
+                    else:
+                        disk_initialize_params.disk_type = f"zones/{self.deploy_app.zone}/diskTypes/{disk.initialize_params.disk_type}"
 
                 if self.deploy_app.project_cloud and self.deploy_app.disk_image:
-                    disk_initialize_params.source_image = f"projects/{self.deploy_app.project_cloud}/global/images/{self.deploy_app.disk_image}"
+                    disk_initialize_params.source_image = (
+                        f"/projects/{self.deploy_app.project_cloud}/global/"
+                        f"images/{self.deploy_app.disk_image}"
+                    )
                 else:
                     disk_initialize_params.source_image = disk.initialize_params.source_image
 
@@ -135,7 +162,6 @@ class Instance:
                 attached_disk.auto_delete = disk.auto_delete
                 attached_disk.boot = disk.boot
                 attached_disk.type_ = disk.type_
-
                 attached_disk.initialize_params = disk.initialize_params
 
             instance.disks.append(attached_disk)
@@ -178,7 +204,8 @@ class Instance:
 
         instance.can_ip_forward = self.deploy_app.ip_forwarding or machine_image.source_instance_properties.can_ip_forward
         instance.machine_type = f"zones/{self.deploy_app.zone}/machineTypes/{self.deploy_app.machine_type}" or machine_image.source_instance_properties.properties.machine_type
-
+        instance.source_machine_image = machine_image.self_link[
+            machine_image.self_link.find("projects/"):]
         # instance.tags = ["str", "str"]
 
         scheduling = compute_v1.Scheduling()
@@ -187,14 +214,14 @@ class Instance:
                                           machine_image.source_instance_properties.scheduling.on_host_maintenance).upper()
         instance.scheduling = scheduling
 
-        # Create disks
-        for disk in machine_image.source_instance_properties.disks:
-            attached_disk = compute_v1.AttachedDisk()
-            attached_disk.auto_delete = disk.auto_delete
-            attached_disk.boot = disk.boot
-            attached_disk.type_ = disk.type_
-            # attached_disk.initialize_params = disk.initialize_params
-            instance.disks.append(attached_disk)
+        # # Create disks
+        # for disk in machine_image.source_instance_properties.disks:
+        #     attached_disk = compute_v1.AttachedDisk()
+        #     attached_disk.auto_delete = disk.auto_delete
+        #     attached_disk.boot = disk.boot
+        #     attached_disk.type_ = disk.type_
+        #     attached_disk.initialize_params = disk.initialize_params
+        #     instance.disks.append(attached_disk)
 
         # Create Network Interfaces
         # instance.network_interfaces = machine_image.source_instance_properties.network_interfaces

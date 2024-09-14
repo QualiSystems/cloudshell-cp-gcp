@@ -17,7 +17,8 @@ DEPLOY_APP_TO_FLOW_PARAMS = (
 def get_deploy_params(request_action) -> type[AbstractGCPDeployFlow]:
     da = request_action.deploy_app
     for deploy_class, deploy_params in DEPLOY_APP_TO_FLOW_PARAMS:
-        if isinstance(da, deploy_class):
+        # isinstance isn't allowed here due to Template inherits Scratch deployment path
+        if type(da) is deploy_class:
             return deploy_params
     raise NotImplementedError(f"Not supported deployment type {type(da)}")
 
